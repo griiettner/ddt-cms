@@ -1,0 +1,40 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log
+
+# Database file (will be created in container)
+data/*.db
+data/*.db-*
+
+# Environment files (mounted separately)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+.context/
+*.md
+!README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/

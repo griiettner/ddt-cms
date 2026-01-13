@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMS DDT - Settings</title>
+
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-co-gray-50">
+  <!-- Header -->
+  <header class="bg-co-blue-primary text-white shadow-lg">
+    <div class="container mx-auto px-6 py-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <h1 class="text-2xl font-bold">CMS for Data-Driven Testing</h1>
+        </div>
+        <nav class="flex items-center space-x-6">
+          <a href="/" class="hover:text-co-blue-light transition-colors">Dashboard</a>
+          <a href="/test-sets.html" class="hover:text-co-blue-light transition-colors">Test Sets</a>
+          <a href="/settings.html" class="hover:text-co-blue-light transition-colors font-semibold">Settings</a>
+          <div class="border-l border-co-blue-secondary pl-6 ml-6">
+            <span class="text-sm" id="user-display">Loading...</span>
+          </div>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container mx-auto px-6 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+      <h2 class="text-3xl font-bold text-co-blue-primary">Configuration Settings</h2>
+      <p class="text-co-gray-600 mt-2">Manage Types and Actions for test steps</p>
+    </div>
+
+    <!-- Types Configuration -->
+    <div class="card mb-8">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h3 class="text-xl font-bold text-co-blue-primary">Type Options</h3>
+          <p class="text-sm text-co-gray-600 mt-1">Types categorize test steps (e.g., Navigation, Interaction, Validation)</p>
+        </div>
+        <button id="new-type-btn" class="btn-primary">
+          <span class="mr-2">+</span> Add Type
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="bg-co-gray-100 border-b border-co-gray-300">
+              <th class="table-header">Order</th>
+              <th class="table-header">Key</th>
+              <th class="table-header">Display Name</th>
+              <th class="table-header text-center">Status</th>
+              <th class="table-header text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="types-body">
+            <tr>
+              <td colspan="5" class="text-center py-8 text-co-gray-400">
+                <div class="flex flex-col items-center">
+                  <div class="spinner mb-4"></div>
+                  <span>Loading type options...</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Actions Configuration -->
+    <div class="card">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h3 class="text-xl font-bold text-co-blue-primary">Action Options</h3>
+          <p class="text-sm text-co-gray-600 mt-1">Actions define what test steps do (e.g., Click, URL, Text Match) and their result types</p>
+        </div>
+        <button id="new-action-btn" class="btn-primary">
+          <span class="mr-2">+</span> Add Action
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="bg-co-gray-100 border-b border-co-gray-300">
+              <th class="table-header">Order</th>
+              <th class="table-header">Key</th>
+              <th class="table-header">Display Name</th>
+              <th class="table-header">Result Type</th>
+              <th class="table-header text-center">Status</th>
+              <th class="table-header text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="actions-body">
+            <tr>
+              <td colspan="6" class="text-center py-8 text-co-gray-400">
+                <div class="flex flex-col items-center">
+                  <div class="spinner mb-4"></div>
+                  <span>Loading action options...</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="mt-8 alert-info">
+      <h4 class="font-bold mb-2">About Result Types</h4>
+      <ul class="text-sm space-y-1 ml-4 list-disc">
+        <li><strong>bool</strong> - Checkbox (true/false)</li>
+        <li><strong>text</strong> - Text input field</li>
+        <li><strong>select</strong> - Dropdown with custom options</li>
+        <li><strong>disable</strong> - Disabled/read-only field</li>
+        <li><strong>array</strong> - Array format like ["option1", "option2"]</li>
+        <li><strong>url</strong> - Dropdown with predefined URLs</li>
+      </ul>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-co-gray-800 text-white mt-16 py-6">
+    <div class="container mx-auto px-6 text-center">
+      <p class="text-sm">CMS for Data-Driven Testing v0.1.0 - Capital One POC</p>
+    </div>
+  </footer>
+
+  <!-- JavaScript -->
+  <script type="module" src="/js/settings.js"></script>
+</body>
+</html>
