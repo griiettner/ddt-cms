@@ -107,28 +107,31 @@ function renderTestRuns(runs) {
   }
 
   tbody.innerHTML = runs.map(run => {
-    const statusClass = run.status === 'passed' ? 'text-green-600' : 'text-red-600';
+    const statusClass = run.status === 'passed' ? 'badge-success' : 'badge-error';
     const date = new Date(run.executed_at).toLocaleString();
     const passRate = run.total_tests > 0
       ? Math.round((run.passed_tests / run.total_tests) * 100)
       : 0;
 
     return `
-      <tr class="border-b border-gray-200 hover:bg-gray-50">
-        <td class="py-3 px-4">${date}</td>
-        <td class="py-3 px-4">${run.executed_by}</td>
-        <td class="py-3 px-4">${run.test_set_name || 'Full Release'}</td>
-        <td class="text-center py-3 px-4">
-          <span class="font-semibold ${statusClass}">
+      <tr class="table-row">
+        <td class="table-cell font-medium">${date}</td>
+        <td class="table-cell">${run.executed_by}</td>
+        <td class="table-cell">${run.test_set_name || 'Full Release'}</td>
+        <td class="table-cell text-center">
+          <span class="${statusClass}">
             ${run.status.toUpperCase()}
           </span>
         </td>
-        <td class="text-center py-3 px-4">${run.total_tests}</td>
-        <td class="text-center py-3 px-4 text-green-600 font-semibold">${run.passed_tests}</td>
-        <td class="text-center py-3 px-4 text-red-600 font-semibold">${run.failed_tests}</td>
+        <td class="table-cell text-center font-bold text-co-success">${run.passed_tests}</td>
+        <td class="table-cell text-center font-bold text-co-red-primary">${run.failed_tests}</td>
       </tr>
     `;
   }).join('');
+  
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 }
 
 /**

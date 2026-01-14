@@ -112,24 +112,39 @@ async function loadTestSets() {
 
       return `
         <tr class="table-row">
-          <td class="table-cell font-semibold text-co-blue-primary">${escapeHtml(testSet.name)}</td>
-          <td class="table-cell text-co-gray-600">${escapeHtml(testSet.description || '')}</td>
-          <td class="table-cell text-center">${testSet.test_case_count}</td>
-          <td class="table-cell text-center text-co-gray-600">${createdDate}</td>
+          <td class="table-cell font-bold text-co-blue-primary">
+            <div class="flex items-center gap-3">
+              <div class="bg-co-blue-primary/10 p-2 rounded-lg text-co-blue-primary">
+                <i data-lucide="folder" class="w-4 h-4"></i>
+              </div>
+              <span class="tracking-tight">${escapeHtml(testSet.name)}</span>
+            </div>
+          </td>
+          <td class="table-cell text-co-gray-600 dark:text-co-gray-400 italic text-sm">${escapeHtml(testSet.description || 'No description provided')}</td>
           <td class="table-cell text-center">
-            <button class="btn-view text-co-blue-primary hover:text-co-blue-dark font-semibold px-3 py-1 rounded" data-id="${testSet.id}">
-              View
-            </button>
-            <button class="btn-edit text-co-gray-600 hover:text-co-blue-primary font-semibold px-3 py-1 rounded ml-2" data-id="${testSet.id}">
-              Edit
-            </button>
-            <button class="btn-delete text-co-red-primary hover:text-co-red-secondary font-semibold px-3 py-1 rounded ml-2" data-id="${testSet.id}" data-name="${escapeHtml(testSet.name)}">
-              Delete
-            </button>
+             <span class="badge-info px-4">${testSet.test_case_count} Cases</span>
+          </td>
+          <td class="table-cell text-center text-xs font-bold text-co-gray-500 uppercase tracking-widest">${createdDate}</td>
+          <td class="table-cell text-right">
+            <div class="flex items-center justify-end gap-2">
+                <button class="p-2 bg-co-blue-primary/10 text-co-blue-primary hover:bg-co-blue-primary hover:text-white rounded-xl transition-all btn-view" data-id="${testSet.id}" title="View Details">
+                  <i data-lucide="eye" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+                <button class="p-2 bg-co-gray-100 dark:bg-co-gray-800 text-co-gray-600 dark:text-co-gray-400 hover:bg-co-blue-primary hover:text-white rounded-xl transition-all btn-edit" data-id="${testSet.id}" title="Edit Metadata">
+                  <i data-lucide="edit-3" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+                <button class="p-2 bg-co-red-primary/10 text-co-red-primary hover:bg-co-red-primary hover:text-white rounded-xl transition-all btn-delete" data-id="${testSet.id}" data-name="${escapeHtml(testSet.name)}" title="Delete Set">
+                  <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+            </div>
           </td>
         </tr>
       `;
     }).join('');
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
 
     // Add event listeners to action buttons
     document.querySelectorAll('.btn-view').forEach(btn => {

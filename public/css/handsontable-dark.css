@@ -1,0 +1,81 @@
+/**
+ * Handsontable Dark Theme - Professional Spreadsheet Look
+ */
+
+.handsontable {
+  background-color: #05070a !important; /* co-gray-950 */
+  color: #f8fafc !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Base Grid Lines */
+.handsontable td, .handsontable th {
+  border-right: 1px solid #1e293b !important;
+  border-bottom: 1px solid #1e293b !important;
+  background: transparent !important;
+  padding: 10px 12px !important;
+}
+
+/* Headers (Spreadsheet Style) */
+.handsontable th {
+  background-color: #0f172a !important;
+  color: #4a90e2 !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-size: 10px !important;
+  border-top: none !important;
+  border-left: none !important;
+  line-height: normal !important;
+}
+
+/* Current Row/Col Highlight */
+.handsontable th.active {
+  background-color: #1e293b !important;
+  color: #3b82f6 !important;
+}
+
+/* Selection and Area */
+.handsontable .htBorder.current {
+  background-color: #3b82f6 !important;
+  border-width: 1px !important;
+}
+
+.handsontable td.area {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Input Editors */
+.handsontableInputHolder textarea {
+  background: #0f172a !important;
+  color: white !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Menus and Dropdowns */
+.htDropdownMenu, .htContextMenu {
+  background: #0f172a !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.htDropdownMenu .htCore, .htContextMenu .htCore {
+  background: transparent !important;
+}
+
+.htDropdownMenu td:hover, .htContextMenu td:hover {
+  background-color: #3b82f6 !important;
+}
+
+/* Row Hover */
+.handsontable tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* checkbox styling - Keep it clean for now */
+.handsontable .htCheckboxRendererInput {
+  margin: 0 !important;
+  cursor: pointer !important;
+}

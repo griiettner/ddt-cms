@@ -31,10 +31,19 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"]
+      styleSrc: [
+        "'self'", 
+        "'unsafe-inline'"
+      ],
+      scriptSrc: [
+        "'self'", 
+        "'unsafe-inline'", 
+        "'unsafe-eval'",
+        "localhost:4000"
+      ],
+      fontSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "ws://localhost:4000", "http://localhost:4000"]
     }
   }
 }));

@@ -38,23 +38,31 @@ async function loadTypes() {
     ];
 
     tbody.innerHTML = sampleTypes.map(type => `
-      <tr class="table-row">
-        <td class="table-cell text-center font-semibold">${type.order_index}</td>
-        <td class="table-cell font-mono text-sm">${type.key}</td>
-        <td class="table-cell font-semibold">${type.display_name}</td>
+      <tr class="table-row group">
+        <td class="table-cell text-center font-bold text-co-gray-400 group-hover:text-co-blue-primary transition-colors">${type.order_index}</td>
+        <td class="table-cell">
+          <div class="inline-flex items-center px-2 py-1 bg-co-blue-primary/5 border border-co-blue-primary/10 rounded-lg text-co-blue-primary font-mono text-xs font-bold">
+            ${type.key}
+          </div>
+        </td>
+        <td class="table-cell font-bold text-co-blue-dark dark:text-co-blue-light">${type.display_name}</td>
         <td class="table-cell text-center">
           ${type.is_active
-            ? '<span class="badge-success">Active</span>'
-            : '<span class="badge-error">Inactive</span>'
+            ? '<span class="badge-success">Operational</span>'
+            : '<span class="badge-error">Deprioritized</span>'
           }
         </td>
-        <td class="table-cell text-center">
-          <button class="text-co-blue-primary hover:text-co-blue-dark font-semibold px-3 py-1">
-            Edit
+        <td class="table-cell text-right">
+          <button class="p-2 bg-co-gray-100 dark:bg-co-gray-800 text-co-gray-600 dark:text-co-gray-400 hover:bg-co-blue-primary hover:text-white rounded-xl transition-all" title="Modify Config">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
           </button>
         </td>
       </tr>
     `).join('');
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
 
     // TODO: Replace with actual API call when implemented
     // const response = await fetch(`${API_BASE}/config/types`);
@@ -93,40 +101,48 @@ async function loadActions() {
     tbody.innerHTML = sampleActions.map(action => {
       // Color code result types
       const typeColors = {
-        'bool': 'bg-green-100 text-green-800',
-        'text': 'bg-blue-100 text-blue-800',
-        'select': 'bg-purple-100 text-purple-800',
-        'disable': 'bg-gray-100 text-gray-800',
-        'array': 'bg-yellow-100 text-yellow-800',
-        'url': 'bg-indigo-100 text-indigo-800'
+        'bool': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800',
+        'text': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        'select': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+        'disable': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700',
+        'array': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+        'url': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
       };
 
-      const typeClass = typeColors[action.result_type] || 'bg-gray-100 text-gray-800';
+      const typeClass = typeColors[action.result_type] || 'bg-gray-100 text-gray-700';
 
       return `
-        <tr class="table-row">
-          <td class="table-cell text-center font-semibold">${action.order_index}</td>
-          <td class="table-cell font-mono text-sm">${action.key}</td>
-          <td class="table-cell font-semibold">${action.display_name}</td>
+        <tr class="table-row group">
+          <td class="table-cell text-center font-bold text-co-gray-400 group-hover:text-indigo-500 transition-colors">${action.order_index}</td>
           <td class="table-cell">
-            <span class="inline-block px-2 py-1 rounded text-xs font-semibold ${typeClass}">
+            <div class="inline-flex items-center px-2 py-1 bg-indigo-500/5 border border-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-300 font-mono text-xs font-bold">
+              ${action.key}
+            </div>
+          </td>
+          <td class="table-cell font-bold text-co-blue-dark dark:text-co-blue-light">${action.display_name}</td>
+          <td class="table-cell">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${typeClass}">
               ${action.result_type}
             </span>
           </td>
           <td class="table-cell text-center">
             ${action.is_active
               ? '<span class="badge-success">Active</span>'
-              : '<span class="badge-error">Inactive</span>'
+              : '<span class="badge-error">Locked</span>'
             }
           </td>
-          <td class="table-cell text-center">
-            <button class="text-co-blue-primary hover:text-co-blue-dark font-semibold px-3 py-1">
-              Edit
+          <td class="table-cell text-right">
+            <button class="p-2 bg-co-gray-100 dark:bg-co-gray-800 text-co-gray-600 dark:text-co-gray-400 hover:bg-indigo-600 hover:text-white rounded-xl transition-all" title="Modify Action">
+              <i data-lucide="zap" class="w-4 h-4"></i>
             </button>
           </td>
         </tr>
       `;
     }).join('');
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
 
     // TODO: Replace with actual API call when implemented
     // const response = await fetch(`${API_BASE}/config/actions`);

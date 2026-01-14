@@ -2,3 +2,4 @@
 .env
 .context/*
 ref/*
+node_modules
