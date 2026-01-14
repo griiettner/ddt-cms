@@ -3,20 +3,15 @@
  */
 
 .handsontable {
-  background-color: #05070a !important; /* co-gray-950 */
+  background-color: #020617 !important; /* co-gray-950 */
   color: #f8fafc !important;
   font-family: 'Inter', sans-serif !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
 }
 
-/* Base Grid Lines */
-.handsontable td, .handsontable th {
-  border-right: 1px solid #1e293b !important;
-  border-bottom: 1px solid #1e293b !important;
-  background: transparent !important;
-  padding: 10px 12px !important;
-}
-
-/* Headers (Spreadsheet Style) */
+/* Row Headers */
 .handsontable th {
   background-color: #0f172a !important;
   color: #4a90e2 !important;
@@ -24,9 +19,26 @@
   text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
   font-size: 10px !important;
-  border-top: none !important;
-  border-left: none !important;
-  line-height: normal !important;
+  border-right: 1px solid #1e293b !important;
+  border-bottom: 1px solid #1e293b !important;
+  padding: 10px !important;
+  vertical-align: middle !important;
+}
+
+/* Data Cells */
+.handsontable td {
+  background-color: #020617 !important;
+  color: #cbd5e1 !important; /* slate-300 for better readability */
+  border-right: 1px solid #1e293b !important;
+  border-bottom: 1px solid #1e293b !important;
+  padding: 12px !important;
+  vertical-align: middle !important;
+  font-size: 13px !important;
+}
+
+/* Ensure white background is gone from row headers */
+.handsontable .relative th {
+  background-color: #0f172a !important;
 }
 
 /* Current Row/Col Highlight */
@@ -38,19 +50,68 @@
 /* Selection and Area */
 .handsontable .htBorder.current {
   background-color: #3b82f6 !important;
-  border-width: 1px !important;
+  border-width: 2px !important;
 }
 
-.handsontable td.area {
-  background-color: rgba(59, 130, 246, 0.15) !important;
+.handsontable td.area, .handsontable td.area-1, .handsontable td.area-2, .handsontable td.area-3, .handsontable td.area-4 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
 }
 
-/* Input Editors */
-.handsontableInputHolder textarea {
-  background: #0f172a !important;
+/* Selection Borders */
+.handsontable .wtBorder {
+  background-color: #3b82f6 !important;
+}
+
+/* Input Editors and Dropdowns */
+.handsontableInputHolder, 
+.handsontableInputHolder textarea,
+.handsontable .htAutocomplete,
+.handsontable .htDropdown,
+.handsontable .htAutocomplete td,
+.handsontable .htDropdown td,
+.handsontable .htSelectEditor,
+.handsontable .htUISelect,
+.handsontable .htUISelect *,
+.handsontableEditor,
+.htSelectEditor,
+.htSelectEditor *,
+.handsontable .ht_master .handsontable td,
+.handsontable .ht_clone_top .handsontable td,
+.handsontable .ht_clone_left .handsontable td,
+.handsontable .ht_clone_debug .handsontable td {
+  background-color: #0f172a !important;
   color: white !important;
+}
+
+/* Specific fix for the white box in the screenshot */
+.handsontable .handsontableInputHolder,
+.handsontableInputHolder,
+.htSelectEditor {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
   border: 1px solid #3b82f6 !important;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3) !important;
+}
+
+.handsontable .htSelectEditor select,
+.htSelectEditor select {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: none !important;
+  padding: 8px !important;
+  width: 100% !important;
+}
+
+/* Dropdown cell specifically */
+.handsontable td.htAutocomplete, 
+.handsontable td.htDropdown {
+  background-color: #020617 !important;
+}
+
+.handsontable tr:nth-child(even) td.htAutocomplete,
+.handsontable tr:nth-child(even) td.htDropdown {
+  background-color: #030816 !important;
 }
 
 /* Menus and Dropdowns */
@@ -69,15 +130,53 @@
   background-color: #3b82f6 !important;
 }
 
-/* Row Hover */
-.handsontable tr:hover td {
-  background-color: rgba(255, 255, 255, 0.02) !important;
+/* Row Hover and Zebra Striping */
+.handsontable tr:nth-child(even) td {
+  background-color: #030816 !important; /* Slightly lighter for zebra */
 }
 
-/* checkbox styling - Keep it clean for now */
+.handsontable tr:hover td {
+  background-color: #1e293b !important; /* co-slate-800 */
+  color: #3b82f6 !important;
+}
+
+/* Ensure row headers also get the zebra effect if desired, or keep them consistent */
+.handsontable tr:nth-child(even) th {
+  background-color: #0f172a !important;
+}
+
+/* checkbox styling */
 .handsontable .htCheckboxRendererInput {
-  margin: 0 !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  border: 2px solid #3b82f6 !important;
+  border-radius: 4px !important;
+  background-color: transparent !important;
+  position: relative !important;
   cursor: pointer !important;
+  margin-top: 4px !important;
+}
+
+.handsontable .htCheckboxRendererInput:checked {
+  background-color: #3b82f6 !important;
+}
+
+.handsontable .htCheckboxRendererInput:checked::after {
+  content: '✓' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+}
+
+.handsontable .htCenter.htMiddle {
+  text-align: center !important;
+  vertical-align: middle !important;
 }
 
 /* Dropdown cell arrows */
