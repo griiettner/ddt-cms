@@ -1,10 +1,13 @@
 module.exports = {
   proxy: "localhost:3000",
-  files: ["public/**/*.{html,css,js}"],
-  port: 4000,
+  files: ["public/**/*.{html,css,js}", "server/**/*.js"],
+  port: process.env.BROWSER_SYNC_PORT || 4000,
   open: false,
-  notify: false,
+  notify: true,
   reloadDelay: 500,
+  watchOptions: {
+    ignored: ['node_modules/', '*.log']
+  },
   snippetOptions: {
     rule: {
       match: /<\/body>/i,
@@ -12,5 +15,8 @@ module.exports = {
         return snippet + match;
       }
     }
+  },
+  socket: {
+    domain: 'localhost:' + (process.env.BROWSER_SYNC_PORT || 4000)
   }
 };

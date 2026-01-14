@@ -23,7 +23,7 @@ async function loadTestCases() {
 
     container.innerHTML = testCases.map(tc => `
         <div class="test-case-accordion mb-4 overflow-hidden border border-co-gray-800 rounded-xl" id="accordion-${tc.id}">
-            <div class="test-case-header bg-co-gray-950 p-4 flex justify-between items-center cursor-pointer hover:bg-co-gray-900 transition-colors" onclick="toggleAccordion('${tc.id}')">
+            <div class="test-case-header bg-co-gray-950 p-4 flex justify-between items-center cursor-pointer hover:bg-co-gray-900 transition-colors" data-accordion-id="${tc.id}">
                 <div class="flex items-center gap-4">
                     <div class="bg-co-blue-primary/20 text-co-blue-primary p-2 rounded-lg">
                         <i data-lucide="table-2" class="w-5 h-5"></i>
@@ -38,7 +38,7 @@ async function loadTestCases() {
             <div class="test-case-body hidden bg-co-gray-950 border-t border-co-gray-800" id="body-${tc.id}">
                 <div class="p-4">
                     <div class="flex gap-2 mb-4">
-                        <button onclick="addNewRow('${tc.id}')" class="bg-co-blue-primary hover:bg-co-blue-secondary text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all">
+                        <button class="add-row-btn bg-co-blue-primary hover:bg-co-blue-secondary text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-all" data-test-id="${tc.id}">
                             <i data-lucide="plus" class="w-3 h-3"></i> ADD STEP
                         </button>
                     </div>
@@ -47,6 +47,18 @@ async function loadTestCases() {
             </div>
         </div>
     `).join('');
+    
+    // Add event listeners for accordion headers
+    container.querySelectorAll('.test-case-header').forEach(header => {
+        const accordionId = header.dataset.accordionId;
+        header.addEventListener('click', () => toggleAccordion(accordionId));
+    });
+    
+    // Add event listeners for add row buttons
+    container.querySelectorAll('.add-row-btn').forEach(button => {
+        const testId = button.dataset.testId;
+        button.addEventListener('click', () => addNewRow(testId));
+    });
     
     if (window.lucide) window.lucide.createIcons();
 }
@@ -74,7 +86,6 @@ function initializeHot(id) {
     console.log(`Instantiating Handsontable for ${id}`);
     
     const hot = new Handsontable(container, {
-        licenseKey: 'non-commercial-and-evaluation',
         data: [
             ['Navigate to login', 'navigation', '', 'url', 'https://capitalone.com/login', true, 'Page loads'],
             ['Click btn', 'interaction', 'btn-1', 'click', '', false, 'Action triggered']
@@ -89,15 +100,15 @@ function initializeHot(id) {
         columns: [
             { type: 'text', className: 'htLeft htMiddle' },
             { 
-                type: 'dropdown', 
-                source: ['navigation', 'interaction', 'validation', 'data_entry', 'wait'],
-                className: 'htCenter htMiddle'
+                type: 'select', 
+                selectOptions: ['navigation', 'interaction', 'validation', 'data_entry', 'wait'],
+                className: 'htCenter htMiddle',
             },
             { type: 'text', className: 'htCenter htMiddle font-mono' },
             { 
-                type: 'dropdown', 
-                source: ['active', 'visible', 'click', 'text_match', 'text_plain', 'url', 'custom_select', 'options_match'],
-                className: 'htCenter htMiddle'
+                type: 'select', 
+                selectOptions: ['active', 'visible', 'click', 'text_match', 'text_plain', 'url', 'custom_select', 'options_match'],
+                className: 'htCenter htMiddle',
             },
             { type: 'text', className: 'htLeft htMiddle font-mono' },
             { type: 'checkbox', className: 'htCenter htMiddle' },
@@ -106,18 +117,13 @@ function initializeHot(id) {
         
         // Behavior
         contextMenu: true,
-        dropdownMenu: true,
-        filters: true,
+        dropdownMenu: false,
+        filters: false,
         manualColumnResize: true,
         manualRowMove: true,
         autoWrapCol: true,
         autoWrapRow: true,
         fillHandle: true, // Grid selection drag
-        
-        // Events
-        afterChange: (changes) => {
-            if (changes) console.log('Spreadsheet data updated:', changes);
-        }
     });
 
     gridsById[id] = hot;

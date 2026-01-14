@@ -4,7 +4,9 @@
   "description": "CMS for Data-Driven Testing - Capital One POC",
   "main": "server/index.js",
   "scripts": {
-    "dev": "npm run build:css && nodemon server/index.js",
+    "dev": "npm run build:css && npm-run-all --parallel dev:server dev:browser-sync",
+    "dev:server": "nodemon server/index.js",
+    "dev:browser-sync": "browser-sync start --config bs-config.js",
     "start": "npm run build:css && node server/index.js",
     "db:init": "node server/db/migrations.js",
     "db:seed": "node server/db/seed.js",

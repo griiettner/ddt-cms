@@ -7,6 +7,7 @@ services:
     container_name: cms-ddt-app
     ports:
       - "3000:3000"
+      - "4000:4000"  # Browser-sync port
     volumes:
       # Mount source code for hot reload
       - ./server:/app/server
@@ -16,12 +17,18 @@ services:
       - ./data:/app/data
       # Don't mount node_modules (use container's version)
       - /app/node_modules
+      # Mount package.json for nodemon to detect changes
+      - ./package.json:/app/package.json
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - BROWSER_SYNC_PORT=4000
     restart: unless-stopped
     networks:
       - cms-network
+    # Add stdin_open and tty for proper nodemon interaction
+    stdin_open: true
+    tty: true
 
 networks:
   cms-network:
