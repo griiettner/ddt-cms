@@ -1,23 +1,24 @@
 FROM node:22-slim
 
-WORKDIR /app
-
-# Install build dependencies for native modules (better-sqlite3)
+# Install build tools for better-sqlite3
 RUN apt-get update && apt-get install -y \
   python3 \
   make \
   g++ \
   && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies first for better caching
+WORKDIR /app
+
+# Only copy package files first for caching
 COPY package*.json ./
+
+# Install dependencies including devDeps for Tailwind
 RUN npm install
 
-# Copy the rest of the application
+# Copy everything else
 COPY . .
 
-# Expose the configured port
 EXPOSE 3030
 
-# Use nodemon for development (already in package.json)
+# Start dev server
 CMD ["npm", "run", "dev"]

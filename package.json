@@ -6,7 +6,16 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon --ext js,html,css --watch server --watch public server/index.js",
+    "dev": "concurrently \"npm run css:watch\" \"nodemon --ext js,html,css --watch server --watch public server/index.js\"",
+    "css:build": "npx tailwindcss -i ./public/css/input.css -o ./public/css/styles.css",
+    "css:watch": "npx tailwindcss -i ./public/css/input.css -o ./public/css/styles.css --watch",
+    "up": "docker compose up -d",
+    "build": "docker compose up --build -d",
+    "down": "docker compose down",
+    "restart": "docker compose restart",
+    "stop": "docker compose stop",
+    "logs": "docker compose logs -f",
+    "sh": "docker compose exec app sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -23,9 +32,14 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
+    "handsontable": "^16.2.0",
     "helmet": "^7.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "autoprefixer": "^10.4.23",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.0.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.1"
   }
 }

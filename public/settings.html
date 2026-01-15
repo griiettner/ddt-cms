@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configuration Settings - CMS for DDT</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body class="bg-co-gray-50 text-co-gray-900">
+    <!-- Navigation -->
+    <nav class="bg-co-blue text-white shadow-lg">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 flex items-center gap-2">
+              <span class="text-xl font-bold tracking-tight">CMS for DDT</span>
+              <span class="bg-co-blue-light text-[10px] uppercase px-1.5 py-0.5 rounded font-bold">UAT</span>
+            </div>
+            <div class="hidden md:block">
+              <div class="ml-10 flex items-baseline space-x-4">
+                <a href="/" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Dashboard</a
+                >
+                <a
+                  href="/releases.html"
+                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Releases</a
+                >
+                <a
+                  href="/test-sets.html"
+                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Test Sets</a
+                >
+                <a href="/settings.html" class="nav-link active px-3 py-2 rounded-md text-sm font-medium bg-white/10"
+                  >Settings</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-right hidden sm:block">
+              <p class="text-xs text-white/60">Current User</p>
+              <p class="text-sm font-medium" id="user-display">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="bg-white border-b border-co-gray-100">
+      <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-co-gray-900 tracking-tight">Configuration Settings</h1>
+          <p class="text-co-gray-700 mt-1">Manage global dropdown options for test actions and element types.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <select
+            id="release-selector"
+            class="bg-white border-2 border-co-blue rounded-md px-4 py-2 text-sm font-semibold text-co-blue focus:outline-none"
+          >
+            <option value="">Loading releases...</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Element Types Panel -->
+        <div class="card bg-white p-0 overflow-hidden">
+          <div class="p-6 border-b border-co-gray-100 flex justify-between items-center bg-co-gray-50/50">
+            <div>
+              <h2 class="text-xl font-bold text-co-blue">Element Types</h2>
+              <p class="text-sm text-co-gray-500">Define UI components (e.g., Input, Button)</p>
+            </div>
+            <button class="add-btn btn-primary px-4 py-2 text-sm" data-category="type">+ Add Type</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-co-gray-50 text-xs font-bold uppercase text-co-gray-500 border-b border-co-gray-100">
+                <tr>
+                  <th class="px-6 py-3">Display Name</th>
+                  <th class="px-6 py-3">Key (Internal)</th>
+                  <th class="px-6 py-3 text-right w-24">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="types-tbody" class="divide-y divide-co-gray-50">
+                <!-- Rows injected here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Test Actions Panel -->
+        <div class="card bg-white p-0 overflow-hidden">
+          <div class="p-6 border-b border-co-gray-100 flex justify-between items-center bg-co-gray-50/50">
+            <div>
+              <h2 class="text-xl font-bold text-co-blue">Test Actions</h2>
+              <p class="text-sm text-co-gray-500">Define playwright actions (e.g., Click, Fill)</p>
+            </div>
+            <button class="add-btn btn-primary px-4 py-2 text-sm" data-category="action">+ Add Action</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-co-gray-50 text-xs font-bold uppercase text-co-gray-500 border-b border-co-gray-100">
+                <tr>
+                  <th class="px-6 py-3">Display Name</th>
+                  <th class="px-6 py-3">Key (Internal)</th>
+                  <th class="px-6 py-3">Result Type</th>
+                  <th class="px-6 py-3 text-right w-24">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="actions-tbody" class="divide-y divide-co-gray-50">
+                <!-- Rows injected here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal for Adding Option -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center">
+          <h3 class="text-lg font-bold" id="modal-title">Add New Option</h3>
+          <button id="close-modal" class="text-white/60 hover:text-white text-2xl">&times;</button>
+        </div>
+        <form id="option-form" class="p-6">
+          <input type="hidden" id="opt-category" />
+          <div class="mb-4">
+            <label class="form-label">Display Name</label>
+            <input type="text" id="opt-display-name" class="form-input" placeholder="e.g., Double Click" required />
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Key (slug)</label>
+            <input type="text" id="opt-key" class="form-input" placeholder="e.g., double_click" required />
+          </div>
+          <div id="result-type-container" class="mb-6 hidden">
+            <label class="form-label">Result Type</label>
+            <select id="opt-result-type" class="form-input">
+              <option value="disable">None (Action only)</option>
+              <option value="text">Input Text</option>
+              <option value="bool">Boolean Check</option>
+              <option value="select">Selection</option>
+            </select>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              id="cancel-btn"
+              class="px-4 py-2 text-co-gray-700 font-medium hover:bg-co-gray-100 rounded"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn-primary px-6 py-2">Save Option</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script type="module" src="/js/settings.js"></script>
+  </body>
+</html>

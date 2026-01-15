@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - CMS for DDT</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body class="bg-co-gray-50 text-co-gray-900">
+    <!-- Navigation -->
+    <nav class="bg-co-blue text-white shadow-lg">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 flex items-center gap-2">
+              <span class="text-xl font-bold tracking-tight">CMS for DDT</span>
+              <span class="bg-co-blue-light text-[10px] uppercase px-1.5 py-0.5 rounded font-bold">UAT</span>
+            </div>
+            <div class="hidden md:block">
+              <div class="ml-10 flex items-baseline space-x-4">
+                <a href="/" class="nav-link active px-3 py-2 rounded-md text-sm font-medium bg-white/10">Dashboard</a>
+                <a
+                  href="/releases.html"
+                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Releases</a
+                >
+                <a
+                  href="/test-sets.html"
+                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Test Sets</a
+                >
+                <a
+                  href="/settings.html"
+                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                  >Settings</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-right hidden sm:block">
+              <p class="text-xs text-white/60">Current User</p>
+              <p class="text-sm font-medium" id="user-display">Loading...</p>
+            </div>
+            <div class="h-8 w-8 rounded-full bg-co-blue-light flex items-center justify-center font-bold text-sm">
+              JD
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="bg-white border-b border-co-gray-100">
+      <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-co-gray-900 tracking-tight">Dashboard</h1>
+          <p class="text-co-gray-700 mt-1">Overview of test data and release metrics.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <select
+            id="release-selector"
+            class="bg-white border-2 border-co-blue rounded-md px-4 py-2 text-sm font-semibold text-co-blue focus:outline-none focus:ring-2 focus:ring-co-blue/20"
+          >
+            <option value="">Loading releases...</option>
+          </select>
+          <button
+            id="export-btn"
+            class="bg-white border-2 border-co-blue text-co-blue font-bold px-4 py-2 rounded-md hover:bg-co-gray-50 flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            Export JSON
+          </button>
+          <button id="create-release-btn" class="btn-primary flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Release
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="card flex flex-col items-center justify-center py-8">
+          <span class="text-co-gray-700 text-sm font-medium uppercase tracking-wider">Total Test Sets</span>
+          <span class="text-4xl font-bold text-co-blue mt-2" id="stat-total-sets">-</span>
+        </div>
+        <div class="card flex flex-col items-center justify-center py-8">
+          <span class="text-co-gray-700 text-sm font-medium uppercase tracking-wider">Total Test Cases</span>
+          <span class="text-4xl font-bold text-co-blue mt-2" id="stat-total-cases">-</span>
+        </div>
+        <div class="card flex flex-col items-center justify-center py-8">
+          <span class="text-co-gray-700 text-sm font-medium uppercase tracking-wider">Last Sync</span>
+          <span class="text-xl font-bold text-co-blue mt-2" id="stat-last-sync">Never</span>
+        </div>
+        <div class="card flex flex-col items-center justify-center py-8">
+          <span class="text-co-gray-700 text-sm font-medium uppercase tracking-wider">Active Release</span>
+          <span class="text-xl font-bold text-co-blue mt-2" id="stat-active-release">None</span>
+        </div>
+      </div>
+
+      <!-- Charts/Tables Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Recent Activity -->
+        <div class="card lg:col-span-2">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-co-gray-900">Recent Test Executions</h2>
+            <a href="/test-runs.html" class="text-co-blue hover:text-co-blue-hover text-sm font-medium"
+              >View all activity</a
+            >
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-co-gray-100">
+              <thead class="bg-co-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-semibold text-co-gray-700 uppercase tracking-wider">
+                    Test Set
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold text-co-gray-700 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold text-co-gray-700 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th class="px-6 py-3 text-left text-xs font-semibold text-co-gray-700 uppercase tracking-wider">
+                    Result
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="recent-executions" class="bg-white divide-y divide-co-gray-100">
+                <!-- Rows loaded via JS -->
+                <tr>
+                  <td colspan="4" class="px-6 py-12 text-center text-co-gray-500 italic">
+                    No execution history found.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Quick Actions / Links -->
+        <div class="space-y-6">
+          <div class="card">
+            <h2 class="text-lg font-bold text-co-gray-900 mb-4">Quick Documentation</h2>
+            <ul class="space-y-3">
+              <li>
+                <a href="#" class="flex items-center gap-3 text-sm text-co-blue hover:underline">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  How to add a new test case
+                </a>
+              </li>
+              <li>
+                <a href="#" class="flex items-center gap-3 text-sm text-co-blue hover:underline">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                  API Export Documentation
+                </a>
+              </li>
+              <li>
+                <a href="#" class="flex items-center gap-3 text-sm text-co-blue hover:underline">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  Release Management Guide
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="card bg-co-blue text-white">
+            <h2 class="text-lg font-bold mb-2">Need Help?</h2>
+            <p class="text-sm text-white/80 mb-4">
+              Reach out to the automation team for support with data migration or API integration.
+            </p>
+            <button
+              class="w-full bg-white text-co-blue font-bold py-2 rounded-md hover:bg-co-gray-50 transition-colors"
+            >
+              Contact Support
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal Placeholder -->
+    <div id="modal-container"></div>
+
+    <script type="module" src="/js/dashboard.js"></script>
+  </body>
+</html>

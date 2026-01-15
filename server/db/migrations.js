@@ -13,10 +13,13 @@ export const initRegistrySchema = () => {
     CREATE TABLE IF NOT EXISTS releases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_number VARCHAR(50) UNIQUE NOT NULL,
+      description TEXT,
       notes TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_by VARCHAR(255),
-      status VARCHAR(20) DEFAULT 'active' CHECK(status IN ('active', 'archived'))
+      closed_at TIMESTAMP,
+      closed_by VARCHAR(255),
+      status VARCHAR(20) DEFAULT 'open' CHECK(status IN ('open', 'closed', 'archived'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_releases_status ON releases(status);

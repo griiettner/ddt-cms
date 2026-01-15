@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Release Management - CMS for DDT</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <style>
+      .kebab-menu {
+        position: relative;
+        display: inline-block;
+      }
+      /* Floating Kebab Menu */
+      #floating-kebab-menu {
+        display: none;
+        position: fixed;
+        background-color: white;
+        min-width: 160px;
+        box-shadow: 0px 10px 25px -5px rgba(0, 0, 0, 0.2), 0px 8px 10px -6px rgba(0, 0, 0, 0.1);
+        z-index: 9999;
+        border-radius: 8px;
+        border: 1px solid #eaeced;
+        padding: 4px;
+      }
+      #floating-kebab-menu button {
+        color: #3d4551;
+        padding: 10px 14px;
+        text-decoration: none;
+        display: block;
+        width: 100%;
+        text-align: left;
+        font-size: 13px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        border-radius: 4px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+      #floating-kebab-menu button:hover {
+        background-color: #f0f4f8;
+        color: #004879;
+      }
+      #floating-kebab-menu button.text-co-red:hover {
+        background-color: #fef2f2;
+        color: #9b1c1c;
+      }
+      .kebab-btn {
+        border-radius: 50%;
+        transition: background-color 0.2s;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: #9ca5af;
+      }
+      .kebab-btn:hover {
+        background-color: #f7f8f9;
+        color: #004879;
+      }
+
+      .notes-editor {
+        min-height: 40px;
+        padding: 4px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+      .notes-editor:hover {
+        border-color: #eaeced;
+        background-color: #f7f8f9;
+      }
+      .notes-editor:focus {
+        outline: none;
+        border-color: #004879;
+        background-color: white;
+        box-shadow: 0 0 0 2px rgba(0, 72, 121, 0.1);
+      }
+
+      .status-pill {
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .status-open {
+        background-color: #def7ec;
+        color: #03543f;
+      }
+      .status-closed {
+        background-color: #fde8e8;
+        color: #9b1c1c;
+      }
+      .status-archived {
+        background-color: #f3f4f6;
+        color: #374151;
+      }
+    </style>
+  </head>
+  <body class="bg-co-gray-50 text-co-gray-900">
+    <!-- Navigation -->
+    <nav class="bg-co-blue text-white shadow-lg">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center">
+            <div class="flex-shrink-0 flex items-center gap-2">
+              <span class="text-xl font-bold tracking-tight">CMS for DDT</span>
+            </div>
+            <div class="ml-10 flex items-baseline space-x-4">
+              <a href="/" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                >Dashboard</a
+              >
+              <a href="/releases.html" class="nav-link active px-3 py-2 rounded-md text-sm font-medium bg-white/10"
+                >Releases</a
+              >
+              <a
+                href="/test-sets.html"
+                class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                >Test Sets</a
+              >
+              <a
+                href="/settings.html"
+                class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
+                >Settings</a
+              >
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="text-right hidden sm:block">
+              <p class="text-xs text-white/60">Current User</p>
+              <p class="text-sm font-medium" id="user-display">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Header & Filters -->
+    <header class="bg-white border-b border-co-gray-100">
+      <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h1 class="text-3xl font-bold text-co-gray-900 tracking-tight">Release Management</h1>
+            <p class="text-co-gray-700 mt-1">Version control for test cases and step definitions.</p>
+          </div>
+          <button id="add-release-btn" class="btn-primary flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Release
+          </button>
+        </div>
+
+        <!-- Filters Bar -->
+        <div class="flex flex-wrap gap-4 items-end bg-co-gray-50/50 p-4 rounded-lg border border-co-gray-100">
+          <div class="flex-1 min-w-[200px]">
+            <label class="form-label text-[10px]">Search (Number/Description)</label>
+            <input type="text" id="filter-search" class="form-input text-sm" placeholder="Search..." />
+          </div>
+          <div>
+            <label class="form-label text-[10px]">Status</label>
+            <select id="filter-status" class="form-input text-sm w-32">
+              <option value="">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label text-[10px]">From Date</label>
+            <input type="date" id="filter-from" class="form-input text-sm" />
+          </div>
+          <div>
+            <label class="form-label text-[10px]">To Date</label>
+            <input type="date" id="filter-to" class="form-input text-sm" />
+          </div>
+          <button
+            id="apply-filters"
+            class="bg-co-blue text-white px-4 py-2 rounded text-sm font-bold hover:bg-co-blue-hover"
+          >
+            Apply
+          </button>
+          <button id="reset-filters" class="text-co-gray-500 hover:text-co-blue text-sm">Reset</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-[1600px] mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div class="bg-white rounded-lg shadow-sm border border-co-gray-100 pb-20">
+        <!-- Added padding at bottom just in case -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-[1200px]">
+            <thead class="bg-co-gray-50 text-[10px] font-bold uppercase text-co-gray-500 border-b border-co-gray-100">
+              <tr>
+                <th class="px-4 py-3">Number</th>
+                <th class="px-4 py-3">Description</th>
+                <th class="px-4 py-3 w-64">Notes (Editable)</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Created</th>
+                <th class="px-4 py-3">Closed</th>
+                <th class="px-4 py-3">Sets</th>
+                <th class="px-4 py-3">Cases</th>
+                <th class="px-4 py-3 text-right"></th>
+              </tr>
+            </thead>
+            <tbody id="releases-tbody" class="divide-y divide-co-gray-100 text-sm">
+              <!-- Loaded via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="p-4 border-t border-co-gray-100 flex justify-between items-center bg-white">
+          <div class="text-xs text-co-gray-500" id="pagination-info">Showing 0 of 0 releases</div>
+          <div class="flex gap-2" id="pagination-controls">
+            <!-- Buttons injected here -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="release-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-lg overflow-hidden">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center">
+          <h3 class="text-lg font-bold" id="modal-title">New Release</h3>
+          <button class="close-modal text-white/60 hover:text-white text-2xl">&times;</button>
+        </div>
+        <form id="release-form" class="p-6">
+          <input type="hidden" id="rel-id" />
+          <div class="mb-4">
+            <label class="form-label">Release Number</label>
+            <input type="text" id="rel-number" class="form-input" placeholder="e.g., 2024.12.01" required />
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Description</label>
+            <input type="text" id="rel-description" class="form-input" placeholder="e.g., Q4 major update" />
+          </div>
+          <div class="mb-6" id="notes-field-container">
+            <label class="form-label">Initial Notes</label>
+            <textarea id="rel-notes" class="form-input h-24" placeholder="Notes..."></textarea>
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="close-modal px-4 py-2 text-co-gray-700 font-medium hover:bg-co-gray-100 rounded"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn-primary px-6 py-2">Save Release</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Floating Menu Container -->
+    <div id="floating-kebab-menu"></div>
+
+    <script type="module" src="/js/releases.js"></script>
+  </body>
+</html>
