@@ -36,17 +36,17 @@ router.post('/:releaseId', (req, res) => {
       const caseId = result.lastInsertRowid;
       
       // Auto-create default scenario
-      db.prepare('INSERT INTO test_scenarios (test_case_id, name, description) VALUES (?, ?, ?)')
+      const scenarioResult = db.prepare('INSERT INTO test_scenarios (test_case_id, name, description) VALUES (?, ?, ?)')
         .run(caseId, 'Default Scenario', 'Auto-created default scenario');
       
-      return caseId;
+      return { caseId, scenarioId: scenarioResult.lastInsertRowid };
     });
 
-    const newId = createWithScenario(testSetId, name, description || '', order_index || 0);
+    const { caseId, scenarioId } = createWithScenario(testSetId, name, description || '', order_index || 0);
     
     res.json({ 
       success: true, 
-      data: { id: newId, test_set_id: testSetId, name, description, order_index } 
+      data: { id: caseId, scenarioId, test_set_id: testSetId, name, description, order_index } 
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -105,6 +105,21 @@ router.patch('/scenarios/:releaseId/:id', (req, res) => {
         const values = Object.values(updates);
         const stmt = db.prepare(`UPDATE test_scenarios SET ${fields} WHERE id = ?`);
         stmt.run(...values, id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// DELETE /api/test-cases/scenarios/:releaseId/:id - Delete scenario and steps
+router.delete('/scenarios/:releaseId/:id', (req, res) => {
+    const { releaseId, id } = req.params;
+    try {
+        const db = getReleaseDb(releaseId);
+        db.transaction(() => {
+            // Delete steps first
+            db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(id);
+            // Delete scenario
+            db.prepare('DELETE FROM test_scenarios WHERE id = ?').run(id);
+        })();
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });

@@ -13,8 +13,13 @@ class TestCasesEditor {
         
         this.modals = {
             options: { type: null, el: document.getElementById('options-modal') },
-            array: { stepId: null, el: document.getElementById('array-modal') }
+            array: { stepId: null, el: document.getElementById('array-modal') },
+            selectConfig: { stepId: null, el: document.getElementById('select-config-modal') },
+            matchConfig: { stepId: null, el: document.getElementById('match-config-modal') }
         };
+        
+        this.selectConfigs = []; // For Custom Select / URL actions
+        this.matchConfigs = [];  // For Options Match action
 
         if (!this.testSetId || !this.releaseId) {
             alert('Missing Release ID or Test Set ID');
@@ -38,6 +43,14 @@ class TestCasesEditor {
             const actionsRes = await api.get(`/api/config/${this.releaseId}/actions`);
             this.config.types = typesRes.data;
             this.config.actions = actionsRes.data;
+            
+            // Load global select configs (for Custom Select / URL)
+            const selectConfigsRes = await api.get('/api/select-configs');
+            this.selectConfigs = selectConfigsRes.data;
+            
+            // Load global match configs (for Options Match)
+            const matchConfigsRes = await api.get('/api/match-configs');
+            this.matchConfigs = matchConfigsRes.data;
         } catch (err) { console.error('Config failed', err); }
     }
 
@@ -124,6 +137,9 @@ class TestCasesEditor {
         const scenario = this.scenarios.find(s => s.id == id);
         document.getElementById('scenario-title').textContent = scenario.name;
         
+        // Show delete button when a scenario is selected
+        document.getElementById('delete-scenario-btn').classList.remove('hidden');
+        
         await this.loadSteps();
     }
 
@@ -169,7 +185,7 @@ class TestCasesEditor {
                 <td><input id="step-definition-${step.id}" class="cell-input" data-field="step_definition" value="${step.step_definition || ''}"></td>
                 <td>${this.renderSelectCell('type', step.type)}</td>
                 <td><input id="element-id-${step.id}" class="cell-input" data-field="element_id" value="${step.element_id || ''}"></td>
-                <td>${this.renderSelectCell('action', step.action)}</td>
+                <td>${this.renderActionSelect(step.action)}</td>
                 <td>${this.renderActionResultCell(step)}</td>
                 <td><input id="required-${step.id}" type="checkbox" class="ml-4" ${step.required ? 'checked' : ''} data-field="required"></td>
                 <td><input id="expected-results-${step.id}" class="cell-input" data-field="expected_results" value="${step.expected_results || ''}"></td>
@@ -177,12 +193,16 @@ class TestCasesEditor {
 
             // Attach listeners to standard inputs
             tr.querySelectorAll('.cell-input, input[type="checkbox"]').forEach(input => {
+                // Skip inputs without data-field (like readonly Options Match display)
+                if (!input.dataset.field) return;
+                
                 if (input.type === 'checkbox') {
-                    // Checkboxes save on change, not blur
+                    // Checkboxes save on change, not blur - convert to string for DB
                     input.onchange = () => {
+                        const val = input.checked ? 'true' : 'false';
                         const s = this.steps.find(x => x.id == step.id);
-                        if (s) s[input.dataset.field] = input.checked;
-                        this.saveStepField(step.id, input.dataset.field, input.checked);
+                        if (s) s[input.dataset.field] = val;
+                        this.saveStepField(step.id, input.dataset.field, val);
                     };
                 } else {
                     // Text inputs save on blur
@@ -197,9 +217,14 @@ class TestCasesEditor {
 
             // Attach listeners to custom selects
             tr.querySelectorAll('.custom-select').forEach(select => {
-                select.onchange = () => {
+                select.onchange = async () => {
                     this.saveStepField(step.id, select.dataset.field, select.value);
-                    if (select.dataset.field === 'action') this.loadSteps(); // Refresh to update result cell type
+                    if (select.dataset.field === 'action') {
+                        // Clear action_result when action changes
+                        await this.saveStepField(step.id, 'action_result', '');
+                        step.action_result = '';
+                        this.loadSteps(); // Refresh to update result cell type
+                    }
                 };
             });
 
@@ -210,55 +235,129 @@ class TestCasesEditor {
                 };
             });
 
+            tr.querySelectorAll('.select-config-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    this.openSelectConfigModal(btn.dataset.stepId, btn.dataset.configType || 'custom_select');
+                };
+            });
+
+            tr.querySelectorAll('.match-config-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    this.openMatchConfigModal(btn.dataset.stepId);
+                };
+            });
+
             tbody.appendChild(tr);
         });
     }
 
     renderSelectCell(category, value) {
         const options = this.config[category + 's'] || [];
+        // Action is no longer editable via UI because it controls field rendering logic
+        const showPencil = category !== 'action';
+
         return `
             <div class="select-container">
                 <select class="custom-select" data-field="${category}">
                     <option value="">-- Select --</option>
                     ${options.map(o => `<option value="${o.key}" ${o.key === value ? 'selected' : ''}>${o.display_name}</option>`).join('')}
                 </select>
-                <div class="pencil-btn" data-category="${category}">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
-                </div>
+                ${showPencil ? `
+                    <div class="pencil-btn" data-category="${category}">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
 
+    renderActionSelect(value) {
+        // Hardcoded action options as per spec
+        const actions = [
+            { key: 'active', label: 'Active' },
+            { key: 'click', label: 'Click' },
+            { key: 'custom_select', label: 'Custom Select' },
+            { key: 'options_match', label: 'Options Match' },
+            { key: 'text_match', label: 'Text Match' },
+            { key: 'text_plain', label: 'Text Plain' },
+            { key: 'url', label: 'URL' },
+            { key: 'visible', label: 'Visible' }
+        ];
+
+        return `
+            <select class="custom-select" data-field="action">
+                <option value="">-- Select --</option>
+                ${actions.map(a => `<option value="${a.key}" ${a.key === value ? 'selected' : ''}>${a.label}</option>`).join('')}
+            </select>
+        `;
+    }
+
     renderActionResultCell(step) {
-        // Logic dependent on Action
-        const action = this.config.actions.find(a => a.key === step.action);
-        const type = action ? action.result_type : 'text';
-
-        if (type === 'disabled') {
-            return `<input class="cell-input bg-co-gray-50 cursor-not-allowed" disabled value="N/A">`;
-        }
+        // Action → Action Result mapping:
+        // Active → text, Click → disabled text, Custom Select → select UX, Options Match → array modal,
+        // Text Match → text, Text Plain → text, URL → select UX, Visible → checkbox
+        const actionKey = step.action || '';
         
-        if (type === 'bool') {
-            const isChecked = step.action_result === 'true' || step.action_result === 1 || step.action_result === '1';
-            return `<input type="checkbox" class="ml-4" ${isChecked ? 'checked' : ''} data-field="action_result">`;
+        switch (actionKey) {
+            case 'active':
+            case 'visible':
+                const isChecked = step.action_result === 'true' || step.action_result === 1 || step.action_result === '1' || step.action_result === true;
+                return `<input type="checkbox" class="ml-4" ${isChecked ? 'checked' : ''} data-field="action_result">`;
+            
+            case 'text_match':
+            case 'text_plain':
+                return `<input class="cell-input" data-field="action_result" value="${step.action_result || ''}">`;
+            
+            case 'click':
+                return `<input class="cell-input bg-co-gray-50 cursor-not-allowed" disabled value="N/A">`;
+            
+            case 'custom_select':
+            case 'url':
+                // Look up the step's associated select config
+                const configId = step.select_config_id;
+                const configType = actionKey; // 'custom_select' or 'url'
+                const config = this.selectConfigs.find(c => c.id == configId);
+                const configOptions = config ? config.options : [];
+                
+                return `
+                    <div class="select-container">
+                        <select class="custom-select" data-field="action_result">
+                            <option value="">-- Select --</option>
+                            ${configOptions.map(o => `<option value="${o}" ${o === step.action_result ? 'selected' : ''}>${o}</option>`).join('')}
+                        </select>
+                        <div class="select-config-btn" data-step-id="${step.id}" data-config-type="${configType}" title="Manage dropdown options">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                        </div>
+                    </div>
+                `;
+            
+            case 'options_match':
+                // Uses match_configs table, displays as JSON array
+                const matchConfigId = step.match_config_id;
+                const matchConfig = this.matchConfigs.find(c => c.id == matchConfigId);
+                const matchOptions = matchConfig ? matchConfig.options : [];
+                const jsonDisplay = JSON.stringify(matchOptions);
+                // Escape quotes for HTML attribute
+                const escapedValue = (step.action_result || '[]').replace(/"/g, '&quot;');
+                const escapedTitle = jsonDisplay.replace(/"/g, '&quot;');
+                
+                return `
+                    <div class="select-container">
+                        <input class="cell-input bg-co-gray-50 cursor-pointer" readonly 
+                            value="${escapedValue}"
+                            title="Options: ${escapedTitle}">
+                        <div class="match-config-btn" data-step-id="${step.id}" title="Manage match options">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                        </div>
+                    </div>
+                `;
+            
+            default:
+                // No action selected or unknown action - disabled and greyed out
+                return `<input class="cell-input bg-co-gray-50 cursor-not-allowed" disabled value="" placeholder="Select an action first">`;
         }
-
-        if (type === 'array') {
-            return `
-                <button class="array-val-trigger" data-id="${step.id}">
-                    ${step.action_result || '[]'}
-                </button>
-            `;
-        }
-
-        if (type === 'select') {
-             // For now, text input for simple select. If user wants specific select list, we'd need another config.
-             // But the prompt says "same custom select UX" for URL/Select? 
-             // That implies a dropdown. I'll use a text input for now or a dummy select.
-             return `<input class="cell-input" data-field="action_result" value="${step.action_result || ''}" placeholder="Value...">`;
-        }
-
-        return `<input class="cell-input" data-field="action_result" value="${step.action_result || ''}">`;
     }
 
     async saveStepField(stepId, field, value) {
@@ -272,7 +371,7 @@ class TestCasesEditor {
 
     openOptionsModal(category) {
         this.modals.options.type = category;
-        const options = this.config[category + 's'];
+        const options = this.config[category + 's'] || [];
         document.getElementById('options-modal-title').textContent = `Edit ${category.toUpperCase()} Options`;
         document.getElementById('options-textarea').value = options.map(o => o.display_name).join('\n');
         this.modals.options.el.style.display = 'flex';
@@ -307,13 +406,16 @@ class TestCasesEditor {
             e.preventDefault();
             const name = document.getElementById('case-name-input').value;
             try {
-                await api.post(`/api/test-cases/${this.releaseId}`, {
+                const res = await api.post(`/api/test-cases/${this.releaseId}`, {
                     testSetId: this.testSetId,
                     name
                 });
                 caseModal.style.display = 'none';
                 caseForm.reset();
-                await this.loadScenarios(); // This will show the auto-created default scenario
+                await this.loadScenarios(); 
+                if (res.data.scenarioId) {
+                    this.selectScenario(res.data.scenarioId);
+                }
             } catch (err) { alert(err.message); }
         };
 
@@ -348,8 +450,10 @@ class TestCasesEditor {
                 });
                 scenarioModal.style.display = 'none';
                 scenarioForm.reset();
-                this.selectedScenarioId = res.data.id; // Auto-select new
                 await this.loadScenarios();
+                if (res.data.id) {
+                    this.selectScenario(res.data.id);
+                }
             } catch (err) { alert(err.message); }
         };
 
@@ -393,21 +497,56 @@ class TestCasesEditor {
             } catch (err) { console.error(err); }
         };
 
+        const deleteBtn = document.getElementById('delete-scenario-btn');
+        deleteBtn.onclick = async () => {
+            if (!this.selectedScenarioId) return;
+            
+            const confirmed = await this.confirmDialog({
+                title: 'Delete Scenario?',
+                message: `Are you sure you want to delete "${scenarioTitle.textContent.trim()}"? This will permanently remove all associated test steps.`,
+                confirmText: 'Delete Scenario'
+            });
+
+            if (!confirmed) return;
+
+            try {
+                await api.delete(`/api/test-cases/scenarios/${this.releaseId}/${this.selectedScenarioId}`);
+                await this.loadScenarios(); // Refresh list
+
+                // Auto-select another scenario from the local cache if available
+                if (this.scenarios.length > 0) {
+                    this.selectScenario(this.scenarios[0].id);
+                } else {
+                    this.selectedScenarioId = null;
+                    document.getElementById('scenario-title').textContent = 'Select a scenario';
+                    this.steps = [];
+                    this.renderSteps();
+                    deleteBtn.classList.add('hidden');
+                }
+            } catch (err) { alert(err.message); }
+        };
+
         document.getElementById('save-options-btn').onclick = () => this.saveOptions();
+        document.getElementById('save-select-config-btn').onclick = () => this.saveSelectConfig();
+        document.getElementById('save-match-config-btn').onclick = () => this.saveMatchConfig();
         
         document.querySelectorAll('.close-modal').forEach(b => {
             b.onclick = () => {
                 this.modals.options.el.style.display = 'none';
                 this.modals.array.el.style.display = 'none';
+                this.modals.selectConfig.el.style.display = 'none';
+                if (this.modals.matchConfig.el) this.modals.matchConfig.el.style.display = 'none';
                 scenarioModal.style.display = 'none';
                 caseModal.style.display = 'none';
+                document.getElementById('confirm-modal').style.display = 'none';
             };
         });
 
-        // Delegate Array clicks
+        // Delegate Array clicks (Options Match)
         document.getElementById('steps-tbody').addEventListener('click', (e) => {
             if (e.target.classList.contains('array-val-trigger')) {
-                this.openArrayModal(e.target.dataset.id, e.target.textContent.trim());
+                const val = e.target.value || e.target.textContent.trim();
+                this.openArrayModal(e.target.dataset.id, val);
             }
         });
 
@@ -463,6 +602,195 @@ class TestCasesEditor {
         await this.saveStepField(this.modals.array.stepId, 'action_result', json);
         this.modals.array.el.style.display = 'none';
         await this.loadSteps();
+    }
+
+    confirmDialog({ title, message, confirmText }) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('confirm-modal');
+            const titleEl = document.getElementById('confirm-title');
+            const msgEl = document.getElementById('confirm-message');
+            const actionBtn = document.getElementById('confirm-action-btn');
+            
+            titleEl.textContent = title || 'Are you sure?';
+            msgEl.textContent = message || 'This action cannot be undone.';
+            actionBtn.textContent = confirmText || 'Delete';
+            
+            modal.style.display = 'flex';
+            
+            const handleAction = (val) => {
+                modal.style.display = 'none';
+                resolve(val);
+            };
+            
+            actionBtn.onclick = () => handleAction(true);
+            modal.querySelector('.close-modal').onclick = () => handleAction(false);
+        });
+    }
+
+    openSelectConfigModal(stepId, configType = 'custom_select') {
+        this.modals.selectConfig.stepId = stepId;
+        this.modals.selectConfig.configType = configType;
+        const step = this.steps.find(s => s.id == stepId);
+        
+        // Filter configs by type
+        const filteredConfigs = this.selectConfigs.filter(c => c.config_type === configType);
+        
+        // Update modal title based on type
+        const modalTitle = configType === 'url' ? 'Manage URL Options' : 'Manage Select Options';
+        document.querySelector('#select-config-modal .font-bold').textContent = modalTitle;
+        
+        // Populate the dropdown with filtered configs
+        const dropdown = document.getElementById('select-config-dropdown');
+        dropdown.innerHTML = '<option value="">-- Create New --</option>' +
+            filteredConfigs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        
+        // If step already has a config, select it and load its options
+        if (step && step.select_config_id) {
+            dropdown.value = step.select_config_id;
+            const config = filteredConfigs.find(c => c.id == step.select_config_id);
+            if (config) {
+                document.getElementById('select-config-name').value = config.name;
+                document.getElementById('select-config-options').value = config.options.join('\n');
+            }
+        } else {
+            document.getElementById('select-config-name').value = '';
+            document.getElementById('select-config-options').value = '';
+        }
+        
+        // When dropdown changes, load that config's data
+        dropdown.onchange = () => {
+            const selectedId = dropdown.value;
+            if (selectedId) {
+                const config = filteredConfigs.find(c => c.id == selectedId);
+                if (config) {
+                    document.getElementById('select-config-name').value = config.name;
+                    document.getElementById('select-config-options').value = config.options.join('\n');
+                }
+            } else {
+                document.getElementById('select-config-name').value = '';
+                document.getElementById('select-config-options').value = '';
+            }
+        };
+        
+        this.modals.selectConfig.el.style.display = 'flex';
+    }
+
+    async saveSelectConfig() {
+        const stepId = this.modals.selectConfig.stepId;
+        const selectedConfigId = document.getElementById('select-config-dropdown').value;
+        const name = document.getElementById('select-config-name').value.trim();
+        const optionsText = document.getElementById('select-config-options').value;
+        const options = optionsText.split('\n').map(l => l.trim()).filter(l => l);
+        
+        if (!name) {
+            alert('Please enter a name for the dropdown configuration.');
+            return;
+        }
+        
+        try {
+            let configId = selectedConfigId;
+            const configType = this.modals.selectConfig.configType || 'custom_select';
+            
+            if (selectedConfigId) {
+                // Update existing config
+                await api.put(`/api/select-configs/${selectedConfigId}`, { name, options });
+            } else {
+                // Create new config with the correct type
+                const res = await api.post('/api/select-configs', { name, options, config_type: configType });
+                configId = res.data.id;
+            }
+            
+            // Associate this config with the step
+            await api.patch(`/api/test-steps/${this.releaseId}/${stepId}`, { select_config_id: configId });
+            
+            // Reload configs and steps
+            await this.loadConfig();
+            await this.loadSteps();
+            
+            this.modals.selectConfig.el.style.display = 'none';
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    openMatchConfigModal(stepId) {
+        this.modals.matchConfig.stepId = stepId;
+        const step = this.steps.find(s => s.id == stepId);
+        
+        // Populate the dropdown with existing match configs
+        const dropdown = document.getElementById('match-config-dropdown');
+        dropdown.innerHTML = '<option value="">-- Create New --</option>' +
+            this.matchConfigs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        
+        // If step already has a config, select it and load its options
+        if (step && step.match_config_id) {
+            dropdown.value = step.match_config_id;
+            const config = this.matchConfigs.find(c => c.id == step.match_config_id);
+            if (config) {
+                document.getElementById('match-config-name').value = config.name;
+                document.getElementById('match-config-options').value = config.options.join('\n');
+            }
+        } else {
+            document.getElementById('match-config-name').value = '';
+            document.getElementById('match-config-options').value = '';
+        }
+        
+        // When dropdown changes, load that config's data
+        dropdown.onchange = () => {
+            const selectedId = dropdown.value;
+            if (selectedId) {
+                const config = this.matchConfigs.find(c => c.id == selectedId);
+                if (config) {
+                    document.getElementById('match-config-name').value = config.name;
+                    document.getElementById('match-config-options').value = config.options.join('\n');
+                }
+            } else {
+                document.getElementById('match-config-name').value = '';
+                document.getElementById('match-config-options').value = '';
+            }
+        };
+        
+        this.modals.matchConfig.el.style.display = 'flex';
+    }
+
+    async saveMatchConfig() {
+        const stepId = this.modals.matchConfig.stepId;
+        const selectedConfigId = document.getElementById('match-config-dropdown').value;
+        const name = document.getElementById('match-config-name').value.trim();
+        const optionsText = document.getElementById('match-config-options').value;
+        const options = optionsText.split('\n').map(l => l.trim()).filter(l => l);
+        
+        if (!name) {
+            alert('Please enter a name for the match configuration.');
+            return;
+        }
+        
+        try {
+            let configId = selectedConfigId;
+            
+            if (selectedConfigId) {
+                // Update existing config
+                await api.put(`/api/match-configs/${selectedConfigId}`, { name, options });
+            } else {
+                // Create new config
+                const res = await api.post('/api/match-configs', { name, options });
+                configId = res.data.id;
+            }
+            
+            // Associate this config with the step and save JSON array to action_result
+            await api.patch(`/api/test-steps/${this.releaseId}/${stepId}`, { 
+                match_config_id: configId,
+                action_result: JSON.stringify(options)
+            });
+            
+            // Reload configs and steps
+            await this.loadConfig();
+            await this.loadSteps();
+            
+            this.modals.matchConfig.el.style.display = 'none';
+        } catch (err) {
+            alert(err.message);
+        }
     }
 }
 

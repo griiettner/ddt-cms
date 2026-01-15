@@ -40,6 +40,30 @@ export const initRegistrySchema = () => {
 
     CREATE INDEX IF NOT EXISTS idx_test_runs_release ON test_runs(release_id);
     CREATE INDEX IF NOT EXISTS idx_test_runs_executed ON test_runs(executed_at DESC);
+
+    -- Global reusable select box configurations (for Custom Select / URL actions)
+    CREATE TABLE IF NOT EXISTS select_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(255) NOT NULL UNIQUE,
+      options TEXT NOT NULL DEFAULT '[]',
+      config_type VARCHAR(50) DEFAULT 'custom_select',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_select_configs_name ON select_configs(name);
+    CREATE INDEX IF NOT EXISTS idx_select_configs_type ON select_configs(config_type);
+
+    -- Global reusable match configurations (for Options Match action)
+    CREATE TABLE IF NOT EXISTS match_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(255) NOT NULL UNIQUE,
+      options TEXT NOT NULL DEFAULT '[]',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_match_configs_name ON match_configs(name);
   `);
 };
 
@@ -97,6 +121,8 @@ export const initReleaseSchema = (dbPath) => {
       element_id VARCHAR(255),
       action VARCHAR(50),
       action_result TEXT,
+      select_config_id INTEGER,
+      match_config_id INTEGER,
       required BOOLEAN DEFAULT 0,
       expected_results TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

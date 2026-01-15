@@ -26,6 +26,8 @@ import testCaseRoutes from './routes/test-cases.js';
 import testStepRoutes from './routes/test-steps.js';
 import configRoutes from './routes/config.js';
 import exportRoutes from './routes/export.js';
+import selectConfigRoutes from './routes/select-configs.js';
+import matchConfigRoutes from './routes/match-configs.js';
 
 // Middleware
 app.use(helmet({
@@ -65,6 +67,8 @@ app.use('/api/test-cases', testCaseRoutes);
 app.use('/api/test-steps', testStepRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/select-configs', selectConfigRoutes);
+app.use('/api/match-configs', matchConfigRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -80,6 +84,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`CMS for DDT server running on port ${PORT}`);
+  console.log(`UAT Test Builder server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

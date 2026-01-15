@@ -1,5 +1,5 @@
 /**
- * API Wrapper for CMS for DDT
+ * API Wrapper for UAT Test Builder
  */
 export const api = {
     async get(url) {

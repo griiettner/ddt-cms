@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Test Cases Editor - CMS for DDT</title>
+    <title>Test Cases Editor - UAT Test Builder</title>
     <link rel="stylesheet" href="/css/styles.css" />
     <style>
       .editor-container {
@@ -143,6 +143,23 @@
       .scenario-title-h2:focus {
         background: #fff;
         box-shadow: 0 0 0 2px rgba(0, 72, 121, 0.1);
+      }
+      .trash-btn {
+        margin-left: 4px;
+        padding: 6px;
+        color: #9ca5af;
+        border-radius: 4px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+      }
+      .trash-btn:hover {
+        background: #fee2e2;
+        color: #dc2626;
       }
 
       /* Test Steps Table */
@@ -407,6 +424,16 @@
                 ></path>
               </svg>
             </div>
+            <button id="delete-scenario-btn" class="trash-btn hidden" title="Delete Scenario">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
           </div>
           <div class="flex gap-3">
             <button id="add-step-btn" class="btn-primary text-sm px-4">Add Step</button>
@@ -487,6 +514,76 @@
       </div>
     </div>
 
+    <!-- Select Config Modal (Custom Select / URL) -->
+    <div id="select-config-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold">Manage Select Options</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Choose Existing Dropdown</p>
+          <select id="select-config-dropdown" class="w-full p-2 border border-co-gray-300 rounded mb-4">
+            <option value="">-- Create New --</option>
+          </select>
+
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Dropdown Name</p>
+          <input
+            id="select-config-name"
+            class="w-full p-2 border border-co-gray-300 rounded mb-4"
+            placeholder="e.g., Countries, Statuses..."
+          />
+
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Options (one per line)</p>
+          <textarea
+            id="select-config-options"
+            class="textarea-full"
+            placeholder="Option 1&#10;Option 2&#10;Option 3"
+          ></textarea>
+
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button id="save-select-config-btn" class="btn-primary px-6 py-2">Save & Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Match Config Modal (Options Match) -->
+    <div id="match-config-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold">Manage Match Options</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Choose Existing Match Set</p>
+          <select id="match-config-dropdown" class="w-full p-2 border border-co-gray-300 rounded mb-4">
+            <option value="">-- Create New --</option>
+          </select>
+
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Match Set Name</p>
+          <input
+            id="match-config-name"
+            class="w-full p-2 border border-co-gray-300 rounded mb-4"
+            placeholder="e.g., Expected Status Values..."
+          />
+
+          <p class="text-xs text-co-gray-500 mb-2 uppercase font-bold">Options (one per line)</p>
+          <textarea
+            id="match-config-options"
+            class="textarea-full"
+            placeholder="Option 1&#10;Option 2&#10;Option 3"
+          ></textarea>
+
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button id="save-match-config-btn" class="btn-primary px-6 py-2">Save & Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Case Modal -->
     <div id="case-modal" class="modal-overlay">
       <div class="modal-card">
@@ -530,6 +627,42 @@
             <button type="submit" class="btn-primary px-6 py-2">Create Scenario</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal-overlay">
+      <div class="modal-card max-w-sm">
+        <div class="p-6 text-center">
+          <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold text-co-blue mb-2" id="confirm-title">Are you sure?</h3>
+          <p class="text-co-gray-500 text-sm mb-6" id="confirm-message">
+            This action cannot be undone. All associated data will be permanently removed.
+          </p>
+          <div class="flex gap-3 mt-8">
+            <button
+              type="button"
+              class="close-modal flex-1 px-4 py-2 bg-co-gray-100 text-co-gray-700 font-bold rounded hover:bg-co-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              id="confirm-action-btn"
+              class="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition-colors shadow-lg shadow-red-200"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
