@@ -71,6 +71,18 @@ router.post('/:releaseId', (req, res) => {
     }
 });
 
+// GET /api/test-sets/:releaseId/:id - Get test set details
+router.get('/:releaseId/:id', (req, res) => {
+    try {
+        const db = getReleaseDb(req.params.releaseId);
+        const testSet = db.prepare('SELECT * FROM test_sets WHERE id = ?').get(req.params.id);
+        if (!testSet) return res.status(404).json({ success: false, error: 'Test set not found' });
+        res.json({ success: true, data: testSet });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // PATCH /api/test-sets/:releaseId/:id - Update test set
 router.patch('/:releaseId/:id', (req, res) => {
     const { name, description } = req.body;

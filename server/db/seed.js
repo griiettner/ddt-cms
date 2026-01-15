@@ -8,24 +8,33 @@ export const seedConfiguration = (dbPath) => {
   const db = new Database(dbPath);
 
   const types = [
-    { key: 'input', name: 'Input' },
-    { key: 'select', name: 'Select' },
-    { key: 'button', name: 'Button' },
-    { key: 'link', name: 'Link' },
-    { key: 'checkbox', name: 'Checkbox' },
-    { key: 'radio', name: 'Radio' },
-    { key: 'text', name: 'Static Text' }
+    { key: 'button-click', name: 'button-click' },
+    { key: 'button-click-redirect', name: 'button-click-redirect' },
+    { key: 'field-checkbox', name: 'field-checkbox' },
+    { key: 'field-error', name: 'field-error' },
+    { key: 'field-input', name: 'field-input' },
+    { key: 'field-label', name: 'field-label' },
+    { key: 'field-options', name: 'field-options' },
+    { key: 'field-radio', name: 'field-radio' },
+    { key: 'field-select', name: 'field-select' },
+    { key: 'field-textarea', name: 'field-textarea' },
+    { key: 'text-link', name: 'text-link' },
+    { key: 'text-plain', name: 'text-plain' },
+    { key: 'ui-card', name: 'ui-card' },
+    { key: 'ui-element', name: 'ui-element' },
+    { key: 'url-validate', name: 'url-validate' },
+    { key: 'url-visit', name: 'url-visit' }
   ];
 
   const actions = [
-    { key: 'click', name: 'Click', result_type: 'disable' },
-    { key: 'fill', name: 'Fill', result_type: 'text' },
-    { key: 'select', name: 'Select Option', result_type: 'text' },
-    { key: 'check', name: 'Check', result_type: 'bool' },
-    { key: 'uncheck', name: 'Uncheck', result_type: 'bool' },
-    { key: 'verify_visible', name: 'Verify Visible', result_type: 'bool' },
-    { key: 'verify_text', name: 'Verify Text', result_type: 'text' },
-    { key: 'wait_for', name: 'Wait For', result_type: 'text' }
+    { key: 'Active', name: 'Active', result_type: 'text' },
+    { key: 'Click', name: 'Click', result_type: 'disabled' },
+    { key: 'Custom Select', name: 'Custom Select', result_type: 'select' },
+    { key: 'Options Match', name: 'Options Match', result_type: 'array' },
+    { key: 'Text Match', name: 'Text Match', result_type: 'text' },
+    { key: 'Text Plain', name: 'Text Plain', result_type: 'text' },
+    { key: 'URL', name: 'URL', result_type: 'select' },
+    { key: 'Visible', name: 'Visible', result_type: 'bool' }
   ];
 
   const insertConfig = db.prepare(`

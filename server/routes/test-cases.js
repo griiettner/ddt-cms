@@ -56,13 +56,41 @@ router.post('/:releaseId', (req, res) => {
 // Update, Delete, Reorder...
 // (Skipping detailed implementation for now to focus on the structure)
 
-// GET /api/test-scenarios/:releaseId?testCaseId=X - List scenarios for a case
+// GET /api/test-cases/scenarios/:releaseId?testCaseId=X - List scenarios for a case
 router.get('/scenarios/:releaseId', (req, res) => {
     const { testCaseId } = req.query;
     if (!testCaseId) return res.status(400).json({ success: false, error: 'testCaseId is required' });
     try {
         const db = getReleaseDb(req.params.releaseId);
         const scenarios = db.prepare('SELECT * FROM test_scenarios WHERE test_case_id = ?').all(testCaseId);
+        res.json({ success: true, data: scenarios });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// POST /api/test-cases/scenarios/:releaseId - Create scenario
+router.post('/scenarios/:releaseId', (req, res) => {
+    const { testCaseId, name, description } = req.body;
+    try {
+        const db = getReleaseDb(req.params.releaseId);
+        const stmt = db.prepare('INSERT INTO test_scenarios (test_case_id, name, description) VALUES (?, ?, ?)');
+        const result = stmt.run(testCaseId, name, description || '');
+        res.json({ success: true, data: { id: result.lastInsertRowid } });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// GET /api/test-cases/all-scenarios/:releaseId?testSetId=X - List ALL scenarios for a test set
+router.get('/all-scenarios/:releaseId', (req, res) => {
+    const { testSetId } = req.query;
+    if (!testSetId) return res.status(400).json({ success: false, error: 'testSetId is required' });
+    try {
+        const db = getReleaseDb(req.params.releaseId);
+        const scenarios = db.prepare(`
+            SELECT ts.*, tc.name as case_name 
+            FROM test_scenarios ts
+            JOIN test_cases tc ON ts.test_case_id = tc.id
+            WHERE tc.test_set_id = ?
+            ORDER BY tc.order_index ASC, ts.order_index ASC
+        `).all(testSetId);
         res.json({ success: true, data: scenarios });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });

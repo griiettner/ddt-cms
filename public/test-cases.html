@@ -4,154 +4,451 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Test Cases Editor - CMS for DDT</title>
-    <!-- Styles -->
     <link rel="stylesheet" href="/css/styles.css" />
-    <link rel="stylesheet" href="/lib/handsontable/dist/handsontable.full.min.css" />
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <style>
-      /* Handsontable Overrides for Capital One Theme */
-      .handsontable th {
-        background-color: #004879 !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border-color: #eaeced !important;
+      .editor-container {
+        display: flex;
+        height: calc(100vh - 64px); /* Subtract nav height */
+        background: #fff;
       }
-      .handsontable td {
-        border-color: #eaeced !important;
-        color: #3d4551 !important;
+
+      /* Sidebar Tabs */
+      .sidebar-tabs {
+        width: 300px;
+        background: #f7f8f9;
+        border-right: 1px solid #eaeced;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
       }
-      .handsontable tr:nth-child(even) td {
-        background-color: #f7f8f9;
+      .sidebar-header {
+        padding: 20px;
+        border-bottom: 1px solid #eaeced;
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
-      .handsontable .htPlaceholder {
-        color: #9ca5af !important;
+      .scenario-tab {
+        padding: 16px 20px;
+        border-bottom: 1px solid #eaeced;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
       }
-      .handsontable .current .htCore td {
-        background-color: #e6f4fb !important;
+      .scenario-tab:hover {
+        background: #eff1f3;
       }
-      /* Page specific */
-      #grid-container {
-        width: 100%;
-        height: calc(100vh - 280px);
+      .scenario-tab.active {
+        background: #fff;
+        border-left: 4px solid #004879;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
+      }
+      .scenario-tab .case-name {
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #727b84;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+      }
+      .scenario-tab .scenario-name {
+        font-size: 14px;
+        font-weight: 700;
+        color: #004879;
+      }
+
+      /* Main Editor Area */
+      .main-editor {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
-        border: 1px solid #eaeced;
+      }
+      .editor-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #eaeced;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fff;
+      }
+
+      /* Test Steps Table */
+      .steps-wrapper {
+        flex: 1;
+        overflow: auto;
+        position: relative;
+      }
+      .steps-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      .steps-table th {
+        position: sticky;
+        top: 0;
+        background: #f7f8f9;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #727b84;
+        text-align: left;
+        padding: 12px 16px;
+        border-bottom: 2px solid #eaeced;
+        z-index: 5;
+      }
+      .steps-table td {
+        padding: 0; /* Minimalist input mode */
+        border-bottom: 1px solid #f0f2f4;
+        height: 48px;
+      }
+      .steps-table tr:hover td {
+        background-color: #fbfbfc;
+      }
+
+      /* Minimalist Input Styles */
+      .cell-input {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: transparent;
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #3d4551;
+        outline: none;
+        display: block;
+      }
+      .cell-input:focus {
+        background: #fff;
+        box-shadow: inset 0 0 0 2px #004879;
+      }
+
+      /* Select with Pencil */
+      .select-container {
+        position: relative;
+        height: 100%;
+        display: flex;
+        align-items: center;
+      }
+      .custom-select {
+        appearance: none;
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: transparent;
+        padding: 12px 40px 12px 16px;
+        font-size: 13px;
+        color: #004879;
+        font-weight: 600;
+        cursor: pointer;
+        outline: none;
+      }
+      .pencil-btn {
+        position: absolute;
+        right: 12px;
+        color: #9ca5af;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: all 0.2s;
+      }
+      .pencil-btn:hover {
+        color: #004879;
+        background: #ebf1f5;
+      }
+
+      /* Action Result Icons */
+      .action-result-cell {
+        display: flex;
+        align-items: center;
+        height: 100%;
+      }
+      .array-val-trigger {
+        width: 100%;
+        height: 100%;
+        background: #f7f8f9;
+        color: #727b84;
+        font-family: monospace;
+        font-size: 11px;
+        border: none;
+        text-align: left;
+        padding: 12px 16px;
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Modals */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-card {
+        background: white;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 500px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      }
+      .modal-body {
+        padding: 24px;
+      }
+      .textarea-full {
+        width: 100%;
+        height: 200px;
+        border: 2px solid #eaeced;
         border-radius: 8px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 13px;
+        outline: none;
+        resize: vertical;
+      }
+      .textarea-full:focus {
+        border-color: #004879;
+      }
+      /* Skeleton & Empty State */
+      .skeleton-row td {
+        padding: 12px 16px;
+      }
+      .skeleton-bone {
+        height: 12px;
+        background: #f1f3f5;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+      }
+      .skeleton-bone::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+        animation: shimmer 1.5s infinite;
+      }
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+
+      .empty-state-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 1) 80%);
+        z-index: 10;
+        pointer-events: none;
+      }
+      .empty-state-content {
+        text-align: center;
+        transform: translateY(-20px);
+      }
+      .cool-arrow {
+        position: absolute;
+        top: 0px;
+        right: 100px;
+        width: 120px;
+        height: 100px;
+        color: #004879;
+        animation: bounce-arrow 2s infinite;
+      }
+      @keyframes bounce-arrow {
+        0%,
+        100% {
+          transform: translateY(0) rotate(10deg);
+        }
+        50% {
+          transform: translateY(-10px) rotate(15deg);
+        }
+      }
+      .hidden {
+        display: none !important;
       }
     </style>
   </head>
-  <body class="bg-co-gray-50 text-co-gray-900">
-    <!-- Navigation -->
-    <nav class="bg-co-blue text-white shadow-lg">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
-          <div class="flex items-center">
-            <div class="flex-shrink-0 flex items-center gap-2">
-              <span class="text-xl font-bold tracking-tight">CMS for DDT</span>
-              <span class="bg-co-blue-light text-[10px] uppercase px-1.5 py-0.5 rounded font-bold">UAT</span>
-            </div>
-            <div class="hidden md:block">
-              <div class="ml-10 flex items-baseline space-x-4">
-                <a href="/" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
-                  >Dashboard</a
-                >
-                <a
-                  href="/releases.html"
-                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
-                  >Releases</a
-                >
-                <a
-                  href="/test-sets.html"
-                  class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-white/5 transition-colors"
-                  >Test Sets</a
-                >
-              </div>
-            </div>
-          </div>
-          <div class="flex items-center gap-4">
-            <div class="text-right hidden sm:block">
-              <p class="text-xs text-white/60">Current User</p>
-              <p class="text-sm font-medium" id="user-display">Loading...</p>
-            </div>
-          </div>
+  <body class="bg-white text-co-gray-900 overflow-hidden">
+    <!-- Navbar -->
+    <nav class="bg-co-blue text-white h-16 flex items-center px-6 shadow-md shrink-0">
+      <div class="flex items-center gap-4">
+        <a href="/test-sets.html" class="hover:text-white/80">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </a>
+        <span class="text-xl font-bold tracking-tight">Step Definition Editor</span>
+        <div id="test-set-name" class="ml-4 px-3 py-1 bg-white/10 rounded text-sm font-medium border border-white/20">
+          Loading...
         </div>
       </div>
     </nav>
 
-    <!-- Header -->
-    <header class="bg-white border-b border-co-gray-100">
-      <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center gap-2 text-sm text-co-gray-500 mb-2">
-          <a href="/test-sets.html" class="hover:text-co-blue">Test Sets</a>
-          <span>&rarr;</span>
-          <span id="breadcrumb-test-set">...</span>
-        </div>
-        <div class="flex justify-between items-end">
-          <div>
-            <h1 class="text-3xl font-bold text-co-gray-900 tracking-tight" id="page-title text-set-name">Test Cases</h1>
-            <p class="text-co-gray-700 mt-1" id="text-set-description">
-              Manage steps and data for the selected test suite.
-            </p>
-          </div>
-          <div class="flex items-center gap-3">
-            <span id="save-status" class="text-sm text-co-gray-500 italic mr-4">All changes saved</span>
-            <button id="add-test-case-btn" class="btn-outline flex items-center gap-2 px-4 py-2">
+    <div class="editor-container">
+      <!-- Sidebar -->
+      <div class="sidebar-tabs" id="scenario-list">
+        <div class="sidebar-header">
+          <h3 class="text-xs font-bold uppercase text-co-gray-500 tracking-widest mb-4">Structure</h3>
+          <div class="flex flex-col gap-2">
+            <button
+              id="add-case-btn"
+              class="w-full bg-white border border-co-blue text-co-blue font-bold py-2 rounded text-xs hover:bg-co-blue/5 transition-colors"
+            >
               + New Test Case
             </button>
-            <button id="sync-btn" class="btn-primary flex items-center gap-2 px-6 py-2">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+            <button id="add-scenario-btn" class="w-full btn-primary py-2 text-xs">+ New Scenario</button>
+          </div>
+        </div>
+        <!-- Tabs injected here -->
+        <div class="p-10 text-center text-co-gray-400 text-sm italic">Loading scenarios...</div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-editor">
+        <div class="editor-header" id="active-scenario-header">
+          <h2 class="text-xl font-bold text-co-blue">Select a scenario to edit</h2>
+          <div class="flex gap-3">
+            <button id="add-step-btn" class="btn-primary text-sm px-4">Add Step</button>
+          </div>
+        </div>
+        <div class="steps-wrapper" id="steps-wrapper">
+          <div id="empty-state" class="empty-state-overlay hidden">
+            <div class="cool-arrow">
+              <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10,80 Q40,60 80,15" />
+                <path d="M70,25 L80,15 L85,25" />
               </svg>
-              Sync with Cloud
-            </button>
+              <div class="text-[10px] font-bold uppercase tracking-widest text-center mt-[-10px]">Start Here</div>
+            </div>
+            <div class="empty-state-content">
+              <div class="text-4xl mb-4">✨</div>
+              <h3 class="text-2xl font-bold text-co-blue mb-2">Zero steps? No problem.</h3>
+              <p class="text-co-gray-500">This scenario is a blank canvas. Let's add your first test step.</p>
+            </div>
+          </div>
+          <table class="steps-table">
+            <thead>
+              <tr>
+                <th style="width: 250px">Step Definition</th>
+                <th style="width: 150px">Type</th>
+                <th style="width: 150px">ID</th>
+                <th style="width: 150px">Action</th>
+                <th style="width: 180px">Action Result</th>
+                <th style="width: 80px">Req</th>
+                <th>Expected Results</th>
+              </tr>
+            </thead>
+            <tbody id="steps-tbody">
+              <tr>
+                <td colspan="7" class="px-6 py-20 text-center text-co-gray-400 italic">
+                  Select a scenario from the left to view steps.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dropdown Options Modal -->
+    <div id="options-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold" id="options-modal-title">Edit Options</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-xs text-co-gray-500 mb-3 uppercase font-bold">One option per line</p>
+          <textarea id="options-textarea" class="textarea-full" placeholder="option1&#10;option2"></textarea>
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button id="save-options-btn" class="btn-primary px-6 py-2">Save Options</button>
           </div>
         </div>
       </div>
-    </header>
+    </div>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <!-- Explorer / Split View -->
-      <div class="flex gap-8">
-        <!-- Test Cases List -->
-        <div class="w-64 flex-shrink-0">
-          <h3 class="text-sm font-bold text-co-gray-700 uppercase tracking-wider mb-4">Test Cases</h3>
-          <div id="test-cases-list" class="space-y-1">
-            <!-- List items injected here -->
-            <div class="animate-pulse flex space-x-4 p-4">
-              <div class="flex-1 space-y-4 py-1">
-                <div class="h-4 bg-co-gray-100 rounded w-3/4"></div>
-              </div>
-            </div>
-          </div>
+    <!-- Array Editor Modal (Options Match) -->
+    <div id="array-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold">Match Options (JSON Array)</h3>
+          <button class="close-modal">&times;</button>
         </div>
-
-        <!-- Spreadsheet View -->
-        <div class="flex-1 min-w-0">
-          <div class="bg-white rounded-lg shadow-sm border border-co-gray-100 p-1">
-            <div id="grid-container"></div>
-          </div>
-
-          <div class="mt-4 flex justify-between items-center text-xs text-co-gray-500">
-            <div class="flex gap-4">
-              <span><strong>TAB</strong> to navigate</span>
-              <span><strong>CMD+S</strong> to save</span>
-              <span><strong>Right Click</strong> for context menu</span>
-            </div>
-            <div id="row-count">0 rows</div>
+        <div class="modal-body">
+          <p class="text-xs text-co-gray-500 mb-3 uppercase font-bold">Enter options to match against</p>
+          <textarea id="array-textarea" class="textarea-full" placeholder="Line 1&#10;Line 2"></textarea>
+          <div class="flex justify-end gap-3 mt-6">
+            <button class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button id="save-array-btn" class="btn-primary px-6 py-2">Update Array</button>
           </div>
         </div>
       </div>
-    </main>
+    </div>
 
-    <!-- Scripts -->
-    <script src="/lib/handsontable/dist/handsontable.full.min.js"></script>
+    <!-- Case Modal -->
+    <div id="case-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold">New Test Case</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <form id="case-form" class="modal-body text-left">
+          <div class="mb-4">
+            <label class="form-label">Case Name (e.g., User Login)</label>
+            <input type="text" id="case-name-input" class="form-input" placeholder="Enter case name..." required />
+          </div>
+          <div class="flex justify-end gap-3 mt-6">
+            <button type="button" class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button type="submit" class="btn-primary px-6 py-2">Create Case</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Scenario Modal -->
+    <div id="scenario-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-12">
+          <h3 class="font-bold">Create New Scenario</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <form id="scenario-form" class="modal-body text-left">
+          <div class="mb-4">
+            <label class="form-label">Scenario Name</label>
+            <input type="text" id="scenario-name-input" class="form-input" placeholder="e.g., Happy Path" required />
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Related Test Case</label>
+            <select id="case-selector" class="form-input" required>
+              <option value="">-- Select Case --</option>
+            </select>
+          </div>
+          <div class="flex justify-end gap-3 mt-6">
+            <button type="button" class="close-modal px-4 py-2 text-co-gray-700 font-medium">Cancel</button>
+            <button type="submit" class="btn-primary px-6 py-2">Create Scenario</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script type="module" src="/js/test-cases.js"></script>
   </body>
 </html>

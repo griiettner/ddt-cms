@@ -3,18 +3,21 @@ import { api } from './utils/api.js';
 class TestCasesEditor {
     constructor() {
         const urlParams = new URLSearchParams(window.location.search);
-        this.testSetId = urlParams.get('ts');
-        this.selectedReleaseId = localStorage.getItem('selectedReleaseId');
+        this.releaseId = urlParams.get('release') || localStorage.getItem('selectedReleaseId');
+        this.testSetId = urlParams.get('testSetId');
         
-        this.testCases = [];
-        this.selectedTestCaseId = null;
+        this.scenarios = [];
         this.selectedScenarioId = null;
-        this.hot = null;
+        this.steps = [];
         this.config = { types: [], actions: [] };
         
-        this.saveTimeout = null;
-        
-        if (!this.testSetId || !this.selectedReleaseId) {
+        this.modals = {
+            options: { type: null, el: document.getElementById('options-modal') },
+            array: { stepId: null, el: document.getElementById('array-modal') }
+        };
+
+        if (!this.testSetId || !this.releaseId) {
+            alert('Missing Release ID or Test Set ID');
             window.location.href = '/test-sets.html';
             return;
         }
@@ -23,206 +26,349 @@ class TestCasesEditor {
     }
 
     async init() {
-        this.setupEventListeners();
-        await this.loadUserInfo();
         await this.loadConfig();
-        await this.loadTestSetDetails();
-        await this.loadTestCases();
-        this.initGrid();
-    }
-
-    async loadUserInfo() {
-        try {
-            const data = await api.get('/api/health');
-            document.getElementById('user-display').textContent = data.user.name;
-        } catch (err) { console.error(err); }
+        await this.loadTestSetInfo();
+        await this.loadScenarios();
+        this.setupEventListeners();
     }
 
     async loadConfig() {
         try {
-            const [typesRes, actionsRes] = await Promise.all([
-                api.get(`/api/config/${this.selectedReleaseId}/types`),
-                api.get(`/api/config/${this.selectedReleaseId}/actions`)
-            ]);
-            this.config.types = typesRes.data.map(t => t.display_name);
-            this.config.actions = actionsRes.data.map(a => a.display_name);
-        } catch (err) { console.error('Failed to load config', err); }
+            const typesRes = await api.get(`/api/config/${this.releaseId}/types`);
+            const actionsRes = await api.get(`/api/config/${this.releaseId}/actions`);
+            this.config.types = typesRes.data;
+            this.config.actions = actionsRes.data;
+        } catch (err) { console.error('Config failed', err); }
     }
 
-    async loadTestSetDetails() {
+    async loadTestSetInfo() {
         try {
-            const res = await api.get(`/api/test-sets/${this.selectedReleaseId}/${this.testSetId}`);
-            document.getElementById('breadcrumb-test-set').textContent = res.data.name;
-            document.getElementById('text-set-name').textContent = res.data.name;
-            document.getElementById('text-set-description').textContent = res.data.description || 'No description';
+            const res = await api.get(`/api/test-sets/${this.releaseId}/${this.testSetId}`);
+            document.getElementById('test-set-name').textContent = res.data.name;
         } catch (err) { console.error(err); }
     }
 
-    async loadTestCases() {
+    async loadScenarios() {
         try {
-            const res = await api.get(`/api/test-cases/${this.selectedReleaseId}?testSetId=${this.testSetId}`);
-            this.testCases = res.data;
-            this.renderTestCasesList();
-            
-            if (this.testCases.length > 0) {
-                this.selectTestCase(this.testCases[0].id);
+            const res = await api.get(`/api/test-cases/all-scenarios/${this.releaseId}?testSetId=${this.testSetId}`);
+            this.scenarios = res.data;
+            this.renderSidebar();
+            if (this.scenarios.length > 0 && !this.selectedScenarioId) {
+                this.selectScenario(this.scenarios[0].id);
             }
         } catch (err) { console.error(err); }
     }
 
-    renderTestCasesList() {
-        const container = document.getElementById('test-cases-list');
-        if (this.testCases.length === 0) {
-            container.innerHTML = '<p class="text-sm text-co-gray-500 italic">No test cases found.</p>';
-            return;
-        }
+    renderSidebar() {
+        const list = document.getElementById('scenario-list');
+        // Keep the header
+        const header = list.querySelector('.sidebar-header');
+        list.innerHTML = '';
+        list.appendChild(header);
 
-        container.innerHTML = this.testCases.map(tc => `
-            <div class="test-case-item p-3 rounded-md cursor-pointer transition-colors ${this.selectedTestCaseId == tc.id ? 'bg-co-blue text-white shadow-sm' : 'hover:bg-co-gray-100 text-co-gray-700'}" 
-                 data-id="${tc.id}">
-                <div class="font-semibold text-sm truncate">${tc.name}</div>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('.test-case-item').forEach(item => {
-            item.addEventListener('click', () => this.selectTestCase(item.dataset.id));
+        this.scenarios.forEach(s => {
+            const tab = document.createElement('div');
+            tab.className = `scenario-tab ${this.selectedScenarioId == s.id ? 'active' : ''}`;
+            tab.innerHTML = `
+                <div class="case-name">${s.case_name}</div>
+                <div class="scenario-name">${s.name}</div>
+            `;
+            tab.onclick = () => this.selectScenario(s.id);
+            list.appendChild(tab);
         });
     }
 
-    async selectTestCase(id) {
-        this.selectedTestCaseId = id;
-        this.renderTestCasesList();
+    async selectScenario(id) {
+        this.selectedScenarioId = id;
+        this.renderSidebar();
         
-        try {
-            const res = await api.get(`/api/test-cases/scenarios/${this.selectedReleaseId}?testCaseId=${this.selectedTestCaseId}`);
-            if (res.data.length > 0) {
-                this.selectedScenarioId = res.data[0].id; // For POC, use first scenario
-                await this.loadSteps();
-            } else {
-                console.warn('No scenarios found for test case', id);
-                this.selectedScenarioId = null;
-                this.hot.loadData([{}, {}, {}]);
-            }
-        } catch (err) { console.error(err); }
+        const scenario = this.scenarios.find(s => s.id == id);
+        document.getElementById('active-scenario-header').querySelector('h2').textContent = scenario.name;
+        
+        await this.loadSteps();
     }
 
     async loadSteps() {
-        if (!this.selectedScenarioId) return;
-        
         try {
-            const res = await api.get(`/api/test-steps/${this.selectedReleaseId}?scenarioId=${this.selectedScenarioId}`);
-            const data = res.data.length > 0 ? res.data : [{}, {}, {}]; // Start with empty rows if nothing found
-            this.hot.loadData(data);
-            document.getElementById('row-count').textContent = `${data.length} steps`;
+            const res = await api.get(`/api/test-steps/${this.releaseId}?scenarioId=${this.selectedScenarioId}`);
+            this.steps = res.data;
+            this.renderSteps();
         } catch (err) { console.error(err); }
     }
 
-    initGrid() {
-        const container = document.getElementById('grid-container');
+    renderSteps() {
+        const tbody = document.getElementById('steps-tbody');
+        const emptyState = document.getElementById('empty-state');
+        tbody.innerHTML = '';
+
+        if (this.steps.length === 0) {
+            emptyState.classList.remove('hidden');
+            // Render 10 skeleton rows that fade out
+            tbody.innerHTML = Array(10).fill(0).map((_, i) => `
+                <tr class="skeleton-row" style="opacity: ${Math.max(0.1, 1 - (i * 0.1))}">
+                    <td><div class="skeleton-bone" style="width: 80%"></div></td>
+                    <td><div class="skeleton-bone" style="width: 60%"></div></td>
+                    <td><div class="skeleton-bone" style="width: 40%"></div></td>
+                    <td><div class="skeleton-bone" style="width: 50%"></div></td>
+                    <td><div class="skeleton-bone" style="width: 70%"></div></td>
+                    <td><div class="skeleton-bone" style="width: 20px"></div></td>
+                    <td><div class="skeleton-bone" style="width: 90%"></div></td>
+                </tr>
+            `).join('');
+            return;
+        }
+
+        if (this.steps.length > 0) {
+            emptyState.classList.add('hidden');
+        }
         
-        this.hot = new Handsontable(container, {
-            data: [],
-            colHeaders: [
-                'Step Definition', 
-                'Type', 
-                'Element ID / Selector', 
-                'Action', 
-                'Action Result (Variable)', 
-                'Required?', 
-                'Expected Results'
-            ],
-            columns: [
-                { data: 'step_definition', type: 'text', placeholder: 'e.g. Click Login button' },
-                { data: 'type', type: 'dropdown', source: this.config.types },
-                { data: 'element_id', type: 'text' },
-                { data: 'action', type: 'dropdown', source: this.config.actions },
-                { data: 'action_result', type: 'text' },
-                { data: 'required', type: 'checkbox', className: 'htCenter' },
-                { data: 'expected_results', type: 'text' }
-            ],
-            rowHeaders: true,
-            height: '100%',
-            width: '100%',
-            stretchH: 'all',
-            manualColumnResize: true,
-            contextMenu: true,
-            filters: true,
-            dropdownMenu: true,
-            licenseKey: 'non-commercial-and-evaluation',
-            afterChange: (changes) => {
-                if (changes) {
-                    this.triggerAutoSave();
+        this.steps.forEach(step => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = step.id;
+            
+            tr.innerHTML = `
+                <td><input class="cell-input" data-field="step_definition" value="${step.step_definition || ''}"></td>
+                <td>${this.renderSelectCell('type', step.type)}</td>
+                <td><input class="cell-input" data-field="element_id" value="${step.element_id || ''}"></td>
+                <td>${this.renderSelectCell('action', step.action)}</td>
+                <td>${this.renderActionResultCell(step)}</td>
+                <td><input type="checkbox" class="ml-4" ${step.required ? 'checked' : ''} data-field="required"></td>
+                <td><input class="cell-input" data-field="expected_results" value="${step.expected_results || ''}"></td>
+            `;
+
+            // Attach listeners to standard inputs
+            tr.querySelectorAll('.cell-input, input[type="checkbox"]').forEach(input => {
+                input.onblur = () => this.saveStepField(step.id, input.dataset.field, input.type === 'checkbox' ? input.checked : input.value);
+                if (input.tagName === 'INPUT' && input.type !== 'checkbox') {
+                    input.onkeydown = (e) => e.key === 'Enter' && input.blur();
                 }
-            },
-            afterCreateRow: () => this.triggerAutoSave(),
-            afterRemoveRow: () => this.triggerAutoSave()
+            });
+
+            // Attach listeners to custom selects
+            tr.querySelectorAll('.custom-select').forEach(select => {
+                select.onchange = () => {
+                    this.saveStepField(step.id, select.dataset.field, select.value);
+                    if (select.dataset.field === 'action') this.loadSteps(); // Refresh to update result cell type
+                };
+            });
+
+            tr.querySelectorAll('.pencil-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    this.openOptionsModal(btn.dataset.category);
+                };
+            });
+
+            tbody.appendChild(tr);
         });
     }
 
-    triggerAutoSave() {
-        const status = document.getElementById('save-status');
-        status.textContent = 'Saving...';
-        status.classList.add('text-co-blue');
-        
-        if (this.saveTimeout) clearTimeout(this.saveTimeout);
-        this.saveTimeout = setTimeout(() => this.saveData(), 1000);
+    renderSelectCell(category, value) {
+        const options = this.config[category + 's'] || [];
+        return `
+            <div class="select-container">
+                <select class="custom-select" data-field="${category}">
+                    <option value="">-- Select --</option>
+                    ${options.map(o => `<option value="${o.key}" ${o.key === value ? 'selected' : ''}>${o.display_name}</option>`).join('')}
+                </select>
+                <div class="pencil-btn" data-category="${category}">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>
+                </div>
+            </div>
+        `;
     }
 
-    async saveData() {
-        if (!this.selectedScenarioId) return;
-        
-        const data = this.hot.getSourceData();
-        // Filter out completely empty rows
-        const filteredData = data.filter(row => Object.values(row).some(val => val !== null && val !== ''));
-        
-        try {
-            await api.post(`/api/test-steps/${this.selectedReleaseId}/bulk`, {
-                scenarioId: this.selectedScenarioId,
-                steps: filteredData
-            });
-            
-            const status = document.getElementById('save-status');
-            status.textContent = 'All changes saved';
-            status.classList.remove('text-co-blue');
-            document.getElementById('row-count').textContent = `${filteredData.length} steps`;
-        } catch (err) {
-            document.getElementById('save-status').textContent = 'Error saving changes!';
+    renderActionResultCell(step) {
+        // Logic dependent on Action
+        const action = this.config.actions.find(a => a.key === step.action);
+        const type = action ? action.result_type : 'text';
+
+        if (type === 'disabled') {
+            return `<input class="cell-input bg-co-gray-50 cursor-not-allowed" disabled value="N/A">`;
         }
+        
+        if (type === 'bool') {
+            return `<input type="checkbox" class="ml-4" ${step.action_result === 'true' ? 'checked' : ''} data-field="action_result">`;
+        }
+
+        if (type === 'array') {
+            return `
+                <button class="array-val-trigger" data-id="${step.id}">
+                    ${step.action_result || '[]'}
+                </button>
+            `;
+        }
+
+        if (type === 'select') {
+             // For now, text input for simple select. If user wants specific select list, we'd need another config.
+             // But the prompt says "same custom select UX" for URL/Select? 
+             // That implies a dropdown. I'll use a text input for now or a dummy select.
+             return `<input class="cell-input" data-field="action_result" value="${step.action_result || ''}" placeholder="Value...">`;
+        }
+
+        return `<input class="cell-input" data-field="action_result" value="${step.action_result || ''}">`;
+    }
+
+    async saveStepField(stepId, field, value) {
+        try {
+            await api.post(`/api/test-steps/${this.releaseId}/bulk`, {
+                scenarioId: this.selectedScenarioId,
+                steps: [{ id: stepId, [field]: value }]
+            });
+        } catch (err) { console.error('Save failed', err); }
+    }
+
+    openOptionsModal(category) {
+        this.modals.options.type = category;
+        const options = this.config[category + 's'];
+        document.getElementById('options-modal-title').textContent = `Edit ${category.toUpperCase()} Options`;
+        document.getElementById('options-textarea').value = options.map(o => o.display_name).join('\n');
+        this.modals.options.el.style.display = 'flex';
+    }
+
+    async saveOptions() {
+        const category = this.modals.options.type;
+        const text = document.getElementById('options-textarea').value;
+        const lines = text.split('\n').filter(l => l.trim());
+        const options = lines.map(l => ({ display_name: l.trim() }));
+
+        try {
+            await api.post(`/api/config/${this.releaseId}/${category}/bulk`, { options });
+            this.modals.options.el.style.display = 'none';
+            await this.loadConfig();
+            this.renderSteps();
+        } catch (err) { alert(err.message); }
     }
 
     setupEventListeners() {
-        document.getElementById('add-test-case-btn').addEventListener('click', async () => {
-            const name = prompt('Enter Test Case Name:');
-            if (name) {
-                try {
-                    await api.post(`/api/test-cases/${this.selectedReleaseId}`, {
-                        testSetId: this.testSetId,
-                        name: name,
-                        order_index: this.testCases.length
-                    });
-                    await this.loadTestCases();
-                } catch (err) { alert(err.message); }
+        const scenarioModal = document.getElementById('scenario-modal');
+        const scenarioForm = document.getElementById('scenario-form');
+        const caseModal = document.getElementById('case-modal');
+        const caseForm = document.getElementById('case-form');
+
+        // New Case Handlers
+        document.getElementById('add-case-btn').onclick = () => {
+            caseModal.style.display = 'flex';
+        };
+
+        caseForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('case-name-input').value;
+            try {
+                await api.post(`/api/test-cases/${this.releaseId}`, {
+                    testSetId: this.testSetId,
+                    name
+                });
+                caseModal.style.display = 'none';
+                caseForm.reset();
+                await this.loadScenarios(); // This will show the auto-created default scenario
+            } catch (err) { alert(err.message); }
+        };
+
+        // New Scenario Handlers
+        document.getElementById('add-scenario-btn').onclick = async () => {
+            try {
+                const casesRes = await api.get(`/api/test-cases/${this.releaseId}?testSetId=${this.testSetId}`);
+                const selector = document.getElementById('case-selector');
+                
+                if (casesRes.data.length === 0) {
+                    // Help the user by suggesting they create a case first
+                    if (confirm('A Test Case is required to hold scenarios. Would you like to create one now?')) {
+                        document.getElementById('add-case-btn').click();
+                    }
+                    return;
+                }
+
+                selector.innerHTML = casesRes.data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                scenarioModal.style.display = 'flex';
+            } catch (err) { alert(err.message); }
+        };
+
+        scenarioForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('scenario-name-input').value;
+            const testCaseId = document.getElementById('case-selector').value;
+
+            try {
+                const res = await api.post(`/api/test-cases/scenarios/${this.releaseId}`, {
+                    testCaseId,
+                    name
+                });
+                scenarioModal.style.display = 'none';
+                scenarioForm.reset();
+                this.selectedScenarioId = res.data.id; // Auto-select new
+                await this.loadScenarios();
+            } catch (err) { alert(err.message); }
+        };
+
+        document.getElementById('add-step-btn').onclick = async () => {
+            if (!this.selectedScenarioId) return;
+            
+            // Immediate feedback: Hide zero-state UI
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('steps-tbody').innerHTML = ''; // Clear skeleton
+
+            try {
+                await api.post(`/api/test-steps/${this.releaseId}/bulk`, {
+                    scenarioId: this.selectedScenarioId,
+                    steps: [{
+                        step_definition: '',
+                        order_index: this.steps.length
+                    }]
+                });
+                await this.loadSteps();
+            } catch (err) { 
+                alert(err.message);
+                this.renderSteps(); // Restore state on error
+            }
+        };
+
+        document.getElementById('save-options-btn').onclick = () => this.saveOptions();
+        
+        document.querySelectorAll('.close-modal').forEach(b => {
+            b.onclick = () => {
+                this.modals.options.el.style.display = 'none';
+                this.modals.array.el.style.display = 'none';
+                scenarioModal.style.display = 'none';
+                caseModal.style.display = 'none';
+            };
+        });
+
+        // Delegate Array clicks
+        document.getElementById('steps-tbody').addEventListener('click', (e) => {
+            if (e.target.classList.contains('array-val-trigger')) {
+                this.openArrayModal(e.target.dataset.id, e.target.textContent.trim());
             }
         });
 
-        document.getElementById('sync-btn').addEventListener('click', () => {
-            const btn = document.getElementById('sync-btn');
-            btn.disabled = true;
-            btn.textContent = 'Syncing...';
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.innerHTML = `
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    Sync Complete
-                `;
-                setTimeout(() => {
-                    btn.innerHTML = `
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                        Sync with Cloud
-                    `;
-                }, 2000);
-            }, 1000);
-        });
+        document.getElementById('save-array-btn').onclick = () => this.saveArray();
+
+        window.onclick = (e) => {
+            if (e.target.classList.contains('modal-overlay')) {
+                e.target.style.display = 'none';
+            }
+        };
+    }
+
+    openArrayModal(stepId, currentVal) {
+        this.modals.array.stepId = stepId;
+        try {
+            const arr = JSON.parse(currentVal || '[]');
+            document.getElementById('array-textarea').value = arr.join('\n');
+        } catch (e) {
+            document.getElementById('array-textarea').value = '';
+        }
+        this.modals.array.el.style.display = 'flex';
+    }
+
+    async saveArray() {
+        const text = document.getElementById('array-textarea').value;
+        const arr = text.split('\n').filter(l => l.trim());
+        const json = JSON.stringify(arr);
+        
+        await this.saveStepField(this.modals.array.stepId, 'action_result', json);
+        this.modals.array.el.style.display = 'none';
+        await this.loadSteps();
     }
 }
 

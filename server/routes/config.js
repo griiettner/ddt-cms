@@ -54,6 +54,35 @@ router.post('/:releaseId/:category', (req, res) => {
   }
 });
 
+// POST /api/config/:releaseId/:category/bulk - Replace all options for a category
+router.post('/:releaseId/:category/bulk', (req, res) => {
+    const { category, releaseId } = req.params;
+    const { options } = req.body; // Expecting array of { display_name }
+
+    try {
+        const db = getReleaseDb(releaseId);
+        
+        db.transaction(() => {
+            // Remove existing active options for this category
+            db.prepare('DELETE FROM configuration_options WHERE category = ?').run(category);
+            
+            // Insert new ones
+            const stmt = db.prepare(`
+                INSERT INTO configuration_options (category, key, display_name, order_index) 
+                VALUES (?, ?, ?, ?)
+            `);
+            
+            options.forEach((opt, i) => {
+                stmt.run(category, opt.display_name, opt.display_name, i);
+            });
+        })();
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // DELETE /api/config/:releaseId/:id - Delete option
 router.delete('/:releaseId/:id', (req, res) => {
   try {
