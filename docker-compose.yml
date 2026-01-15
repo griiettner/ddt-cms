@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3030:3030"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - data:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    restart: always
+
+volumes:
+  data:
