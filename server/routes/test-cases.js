@@ -95,4 +95,18 @@ router.get('/all-scenarios/:releaseId', (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// PATCH /api/test-cases/scenarios/:releaseId/:id - Update scenario
+router.patch('/scenarios/:releaseId/:id', (req, res) => {
+    const { releaseId, id } = req.params;
+    const updates = req.body;
+    try {
+        const db = getReleaseDb(releaseId);
+        const fields = Object.keys(updates).map(f => `${f} = ?`).join(', ');
+        const values = Object.values(updates);
+        const stmt = db.prepare(`UPDATE test_scenarios SET ${fields} WHERE id = ?`);
+        stmt.run(...values, id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
 export default router;

@@ -61,20 +61,59 @@ class TestCasesEditor {
 
     renderSidebar() {
         const list = document.getElementById('scenario-list');
-        // Keep the header
         const header = list.querySelector('.sidebar-header');
         list.innerHTML = '';
         list.appendChild(header);
 
+        // Group scenarios by case
+        const groups = {};
         this.scenarios.forEach(s => {
-            const tab = document.createElement('div');
-            tab.className = `scenario-tab ${this.selectedScenarioId == s.id ? 'active' : ''}`;
-            tab.innerHTML = `
-                <div class="case-name">${s.case_name}</div>
-                <div class="scenario-name">${s.name}</div>
+            if (!groups[s.case_name]) groups[s.case_name] = [];
+            groups[s.case_name].push(s);
+        });
+
+        if (!this.openCases) this.openCases = new Set();
+        
+        // Auto-open group containing selected scenario
+        const selectedScenario = this.scenarios.find(s => s.id == this.selectedScenarioId);
+        if (selectedScenario) this.openCases.add(selectedScenario.case_name);
+
+        Object.entries(groups).forEach(([caseName, scenarios]) => {
+            const container = document.createElement('div');
+            container.className = `case-accordion ${this.openCases.has(caseName) ? 'open' : ''}`;
+            
+            container.innerHTML = `
+                <div class="case-header">
+                    <span class="case-title">${caseName}</span>
+                    <svg class="chevron w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
+                <div class="scenario-list">
+                    ${scenarios.map(s => `
+                        <div class="scenario-tab ${this.selectedScenarioId == s.id ? 'active' : ''}" data-id="${s.id}">
+                            ${s.name}
+                        </div>
+                    `).join('')}
+                </div>
             `;
-            tab.onclick = () => this.selectScenario(s.id);
-            list.appendChild(tab);
+
+            // Toggle logic
+            container.querySelector('.case-header').onclick = (e) => {
+                const isOpen = container.classList.toggle('open');
+                if (isOpen) this.openCases.add(caseName);
+                else this.openCases.delete(caseName);
+            };
+
+            // Scenario selection logic
+            container.querySelectorAll('.scenario-tab').forEach(tab => {
+                tab.onclick = (e) => {
+                    e.stopPropagation();
+                    this.selectScenario(tab.dataset.id);
+                };
+            });
+
+            list.appendChild(container);
         });
     }
 
@@ -83,7 +122,7 @@ class TestCasesEditor {
         this.renderSidebar();
         
         const scenario = this.scenarios.find(s => s.id == id);
-        document.getElementById('active-scenario-header').querySelector('h2').textContent = scenario.name;
+        document.getElementById('scenario-title').textContent = scenario.name;
         
         await this.loadSteps();
     }
@@ -127,20 +166,32 @@ class TestCasesEditor {
             tr.dataset.id = step.id;
             
             tr.innerHTML = `
-                <td><input class="cell-input" data-field="step_definition" value="${step.step_definition || ''}"></td>
+                <td><input id="step-definition-${step.id}" class="cell-input" data-field="step_definition" value="${step.step_definition || ''}"></td>
                 <td>${this.renderSelectCell('type', step.type)}</td>
-                <td><input class="cell-input" data-field="element_id" value="${step.element_id || ''}"></td>
+                <td><input id="element-id-${step.id}" class="cell-input" data-field="element_id" value="${step.element_id || ''}"></td>
                 <td>${this.renderSelectCell('action', step.action)}</td>
                 <td>${this.renderActionResultCell(step)}</td>
-                <td><input type="checkbox" class="ml-4" ${step.required ? 'checked' : ''} data-field="required"></td>
-                <td><input class="cell-input" data-field="expected_results" value="${step.expected_results || ''}"></td>
+                <td><input id="required-${step.id}" type="checkbox" class="ml-4" ${step.required ? 'checked' : ''} data-field="required"></td>
+                <td><input id="expected-results-${step.id}" class="cell-input" data-field="expected_results" value="${step.expected_results || ''}"></td>
             `;
 
             // Attach listeners to standard inputs
             tr.querySelectorAll('.cell-input, input[type="checkbox"]').forEach(input => {
-                input.onblur = () => this.saveStepField(step.id, input.dataset.field, input.type === 'checkbox' ? input.checked : input.value);
-                if (input.tagName === 'INPUT' && input.type !== 'checkbox') {
-                    input.onkeydown = (e) => e.key === 'Enter' && input.blur();
+                if (input.type === 'checkbox') {
+                    // Checkboxes save on change, not blur
+                    input.onchange = () => {
+                        const s = this.steps.find(x => x.id == step.id);
+                        if (s) s[input.dataset.field] = input.checked;
+                        this.saveStepField(step.id, input.dataset.field, input.checked);
+                    };
+                } else {
+                    // Text inputs save on blur
+                    input.oninput = () => {
+                        const s = this.steps.find(x => x.id == step.id);
+                        if (s) s[input.dataset.field] = input.value;
+                    };
+                    input.onblur = () => this.saveStepField(step.id, input.dataset.field, input.value);
+                    input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
                 }
             });
 
@@ -188,7 +239,8 @@ class TestCasesEditor {
         }
         
         if (type === 'bool') {
-            return `<input type="checkbox" class="ml-4" ${step.action_result === 'true' ? 'checked' : ''} data-field="action_result">`;
+            const isChecked = step.action_result === 'true' || step.action_result === 1 || step.action_result === '1';
+            return `<input type="checkbox" class="ml-4" ${isChecked ? 'checked' : ''} data-field="action_result">`;
         }
 
         if (type === 'array') {
@@ -210,11 +262,11 @@ class TestCasesEditor {
     }
 
     async saveStepField(stepId, field, value) {
+        // Skip temp IDs - they get synced separately
+        if (stepId.toString().startsWith('temp')) return;
+        
         try {
-            await api.post(`/api/test-steps/${this.releaseId}/bulk`, {
-                scenarioId: this.selectedScenarioId,
-                steps: [{ id: stepId, [field]: value }]
-            });
+            await api.patch(`/api/test-steps/${this.releaseId}/${stepId}`, { [field]: value });
         } catch (err) { console.error('Save failed', err); }
     }
 
@@ -304,23 +356,41 @@ class TestCasesEditor {
         document.getElementById('add-step-btn').onclick = async () => {
             if (!this.selectedScenarioId) return;
             
-            // Immediate feedback: Hide zero-state UI
+            // Immediate UI feedback
             document.getElementById('empty-state').classList.add('hidden');
-            document.getElementById('steps-tbody').innerHTML = ''; // Clear skeleton
+            
+            const tempId = `temp-${Date.now()}`;
+            const newStep = { 
+                id: tempId, 
+                step_definition: '', 
+                order_index: this.steps.length 
+            };
+            
+            this.steps.push(newStep);
+            this.renderSteps(); // This one is okay, it happens before typing
+            
+            const row = document.querySelector(`tr[data-id="${tempId}"]`);
+            if (row) row.querySelector('input').focus();
 
             try {
-                await api.post(`/api/test-steps/${this.releaseId}/bulk`, {
+                // Sync with server without re-rendering the whole table
+                const res = await api.post(`/api/test-steps/${this.releaseId}/sync`, {
                     scenarioId: this.selectedScenarioId,
-                    steps: [{
-                        step_definition: '',
-                        order_index: this.steps.length
-                    }]
+                    steps: this.steps.map(s => {
+                        const { id, ...rest } = s;
+                        return id.toString().startsWith('temp') ? { step_definition: '', ...rest } : s;
+                    })
                 });
-                await this.loadSteps();
-            } catch (err) { 
-                alert(err.message);
-                this.renderSteps(); // Restore state on error
-            }
+                
+                // Silver lining: we update the IDs in the background so future saves work
+                const freshRes = await api.get(`/api/test-steps/${this.releaseId}?scenarioId=${this.selectedScenarioId}`);
+                this.steps = freshRes.data;
+                // We update the data-id on the live rows so we don't need a full render
+                const rows = document.getElementById('steps-tbody').querySelectorAll('tr');
+                this.steps.forEach((s, i) => {
+                    if (rows[i]) rows[i].dataset.id = s.id;
+                });
+            } catch (err) { console.error(err); }
         };
 
         document.getElementById('save-options-btn').onclick = () => this.saveOptions();
@@ -342,6 +412,30 @@ class TestCasesEditor {
         });
 
         document.getElementById('save-array-btn').onclick = () => this.saveArray();
+
+        // Editable Scenario Title logic
+        const scenarioTitle = document.getElementById('scenario-title');
+        scenarioTitle.onblur = async () => {
+            const newName = scenarioTitle.textContent.trim();
+            if (!newName || !this.selectedScenarioId) return;
+
+            try {
+                await api.patch(`/api/test-cases/scenarios/${this.releaseId}/${this.selectedScenarioId}`, { name: newName });
+                // Update local list
+                const s = this.scenarios.find(x => x.id == this.selectedScenarioId);
+                if (s) {
+                    s.name = newName;
+                    this.renderSidebar(); // Refresh sidebar to show new name immediately
+                }
+            } catch (err) { console.error('Failed to save scenario title', err); }
+        };
+
+        scenarioTitle.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                scenarioTitle.blur();
+            }
+        };
 
         window.onclick = (e) => {
             if (e.target.classList.contains('modal-overlay')) {

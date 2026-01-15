@@ -29,33 +29,75 @@
         top: 0;
         z-index: 10;
       }
-      .scenario-tab {
-        padding: 16px 20px;
+      .combo-buttons {
+        display: flex;
+        gap: 8px;
+      }
+      .combo-buttons button {
+        flex: 1;
+        white-space: nowrap;
+        padding: 8px 4px !important;
+        font-size: 10px !important;
+      }
+
+      /* Accordion Styles */
+      .case-accordion {
         border-bottom: 1px solid #eaeced;
-        cursor: pointer;
-        transition: all 0.2s;
-        position: relative;
       }
-      .scenario-tab:hover {
-        background: #eff1f3;
-      }
-      .scenario-tab.active {
+      .case-header {
+        padding: 12px 20px;
         background: #fff;
-        border-left: 4px solid #004879;
-        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.2s;
       }
-      .scenario-tab .case-name {
-        font-size: 10px;
+      .case-header:hover {
+        background: #fbfbfc;
+      }
+      .case-header .case-title {
+        font-size: 11px;
+        font-weight: 800;
         text-transform: uppercase;
-        font-weight: 700;
         color: #727b84;
         letter-spacing: 0.05em;
-        margin-bottom: 4px;
       }
-      .scenario-tab .scenario-name {
-        font-size: 14px;
-        font-weight: 700;
+      .case-header .chevron {
+        transition: transform 0.2s;
+        color: #9ca5af;
+      }
+      .case-accordion.open .chevron {
+        transform: rotate(180deg);
+      }
+
+      .scenario-list {
+        display: none;
+        background: #f8f9fa;
+      }
+      .case-accordion.open .scenario-list {
+        display: block;
+      }
+
+      .scenario-tab {
+        padding: 12px 20px 12px 36px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+        font-size: 13px;
+        font-weight: 600;
+        color: #4a5568;
+      }
+      .scenario-tab:hover {
+        background: #edf2f7;
         color: #004879;
+      }
+      .scenario-tab.active {
+        background: #ebf4ff;
+        color: #004879;
+        border-left-color: #004879;
+        font-weight: 700;
       }
 
       /* Main Editor Area */
@@ -72,6 +114,35 @@
         justify-content: space-between;
         align-items: center;
         background: #fff;
+      }
+      .editable-title-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: text;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        margin-left: -8px;
+      }
+      .editable-title-container:hover {
+        background: #f8f9fa;
+      }
+      .editable-title-container .edit-icon {
+        opacity: 0;
+        color: #9ca5af;
+        transition: opacity 0.2s;
+      }
+      .editable-title-container:hover .edit-icon {
+        opacity: 1;
+      }
+      .scenario-title-h2 {
+        outline: none;
+        min-width: 50px;
+      }
+      .scenario-title-h2:focus {
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(0, 72, 121, 0.1);
       }
 
       /* Test Steps Table */
@@ -122,6 +193,8 @@
       .cell-input:focus {
         background: #fff;
         box-shadow: inset 0 0 0 2px #004879;
+        position: relative;
+        z-index: 50;
       }
 
       /* Select with Pencil */
@@ -306,14 +379,14 @@
       <div class="sidebar-tabs" id="scenario-list">
         <div class="sidebar-header">
           <h3 class="text-xs font-bold uppercase text-co-gray-500 tracking-widest mb-4">Structure</h3>
-          <div class="flex flex-col gap-2">
+          <div class="combo-buttons">
             <button
               id="add-case-btn"
-              class="w-full bg-white border border-co-blue text-co-blue font-bold py-2 rounded text-xs hover:bg-co-blue/5 transition-colors"
+              class="bg-white border border-co-blue text-co-blue font-bold rounded hover:bg-co-blue/5 transition-colors"
             >
-              + New Test Case
+              + New Case
             </button>
-            <button id="add-scenario-btn" class="w-full btn-primary py-2 text-xs">+ New Scenario</button>
+            <button id="add-scenario-btn" class="btn-primary font-bold rounded">+ New Scenario</button>
           </div>
         </div>
         <!-- Tabs injected here -->
@@ -323,7 +396,18 @@
       <!-- Main Content -->
       <div class="main-editor">
         <div class="editor-header" id="active-scenario-header">
-          <h2 class="text-xl font-bold text-co-blue">Select a scenario to edit</h2>
+          <div class="editable-title-container">
+            <h2 id="scenario-title" class="text-xl font-bold text-co-blue scenario-title-h2" contenteditable="true">
+              Select a scenario
+            </h2>
+            <div class="edit-icon">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"
+                ></path>
+              </svg>
+            </div>
+          </div>
           <div class="flex gap-3">
             <button id="add-step-btn" class="btn-primary text-sm px-4">Add Step</button>
           </div>

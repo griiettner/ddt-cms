@@ -31,6 +31,17 @@ export const api = {
         return data;
     },
 
+    async patch(url, body) {
+        const res = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Request failed');
+        return data;
+    },
+
     async delete(url) {
         const res = await fetch(url, { method: 'DELETE' });
         const data = await res.json();

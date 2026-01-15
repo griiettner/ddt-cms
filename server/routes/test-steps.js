@@ -19,44 +19,48 @@ router.get('/:releaseId', (req, res) => {
   }
 });
 
-// POST /api/test-steps/:releaseId/bulk - Bulk update/sync steps for a scenario
-router.post('/:releaseId/bulk', (req, res) => {
-  const { scenarioId, steps } = req.body; // steps is an array of objects
-  if (!scenarioId || !Array.isArray(steps)) {
-    return res.status(400).json({ success: false, error: 'scenarioId and steps array are required' });
-  }
+// PATCH /api/test-steps/:releaseId/:id - Partial update a step
+router.patch('/:releaseId/:id', (req, res) => {
+  const { releaseId, id } = req.params;
+  const updates = req.body;
 
-  const db = getReleaseDb(req.params.releaseId);
-  
   try {
-    const sync = db.transaction((stepsToSync) => {
-      // For POC, we'll just clear and re-insert to maintain order simple.
-      // In prod, you'd do a proper diff (UPSERT).
+    const db = getReleaseDb(releaseId);
+    const fields = Object.keys(updates).map(f => `${f} = ?`).join(', ');
+    const values = Object.values(updates).map(val => {
+      if (val === undefined) return null;
+      if (typeof val === 'boolean') return val ? 1 : 0;
+      return val;
+    });
+    
+    const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ?`);
+    stmt.run(...values, id);
+    
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/test-steps/:releaseId/sync - Full sync steps (reorders, bulk additions)
+router.post('/:releaseId/sync', (req, res) => {
+  const { scenarioId, steps } = req.body;
+  if (!scenarioId || !Array.isArray(steps)) return res.status(400).json({ success: false, error: 'Invalid data' });
+
+  try {
+    const db = getReleaseDb(req.params.releaseId);
+    db.transaction(() => {
       db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenarioId);
-      
       const insert = db.prepare(`
         INSERT INTO test_steps (
           test_scenario_id, order_index, step_definition, type, 
           element_id, action, action_result, required, expected_results
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-
-      stepsToSync.forEach((step, index) => {
-        insert.run(
-          scenarioId,
-          index,
-          step.step_definition || '',
-          step.type || '',
-          step.element_id || '',
-          step.action || '',
-          step.action_result || '',
-          step.required ? 1 : 0,
-          step.expected_results || ''
-        );
+      steps.forEach((s, i) => {
+        insert.run(scenarioId, i, s.step_definition || '', s.type || '', s.element_id || '', s.action || '', s.action_result || '', s.required ? 1 : 0, s.expected_results || '');
       });
-    });
-
-    sync(steps);
+    })();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
