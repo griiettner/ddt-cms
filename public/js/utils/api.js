@@ -1,5 +1,5 @@
 /**
- * API Wrapper for UAT Test Builder
+ * API Wrapper for Test Builder
  */
 export const api = {
     async get(url) {

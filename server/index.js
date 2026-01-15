@@ -84,6 +84,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`UAT Test Builder server running on port ${PORT}`);
+  console.log(`Test Builder server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
