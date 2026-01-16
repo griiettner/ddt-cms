@@ -37,8 +37,11 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || '*'
 }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
-app.use('/lib', express.static(path.join(__dirname, '../node_modules')));
+// Serve static files - in production serve from dist, in dev Vite handles it
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction) {
+  app.use(express.static(path.join(__dirname, '../dist')));
+}
 
 // Basic Identification Middleware mock (per documentation)
 app.use((req, res, next) => {
@@ -69,6 +72,13 @@ app.use('/api/config', configRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/select-configs', selectConfigRoutes);
 app.use('/api/match-configs', matchConfigRoutes);
+
+// SPA fallback - serve index.html for non-API routes in production
+if (isProduction) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

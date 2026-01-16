@@ -1,7 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./public/**/*.{html,js}",
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -18,13 +19,25 @@ export default {
         'co-gray': {
           50: '#F7F8F9',
           100: '#EAECED',
+          200: '#D1D5DB',
+          300: '#9CA5AF',
           500: '#9CA5AF',
+          600: '#727b84',
           700: '#69747F',
           900: '#3D4551',
         },
-        success: '#00A758',
-        warning: '#FF9E1B',
-        error: '#DA0025',
+        success: {
+          DEFAULT: '#00A758',
+          light: '#D1FAE5',
+        },
+        warning: {
+          DEFAULT: '#FF9E1B',
+          light: '#FEF3C7',
+        },
+        error: {
+          DEFAULT: '#DA0025',
+          light: '#FEE2E2',
+        },
         info: '#0076C0',
       },
       fontFamily: {
@@ -39,7 +52,10 @@ export default {
           'sans-serif',
         ],
       },
+      borderRadius: {
+        '12': '12px',
+      },
     },
   },
   plugins: [],
-}
+};

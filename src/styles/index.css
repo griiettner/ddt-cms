@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-co-gray-50 text-co-gray-900 font-sans;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-co-blue text-white px-6 py-3 rounded font-semibold transition-colors hover:bg-co-blue-hover disabled:bg-co-gray-500 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-co-red text-white px-6 py-3 rounded font-semibold transition-colors hover:bg-co-red-hover;
+  }
+  .btn-outline {
+    @apply bg-transparent text-co-blue px-6 py-3 rounded font-semibold border-2 border-co-blue transition-all hover:bg-co-blue hover:text-white;
+  }
+  .btn-sm {
+    @apply px-4 py-2 text-sm;
+  }
+  .card {
+    @apply bg-white border border-co-gray-100 rounded-lg p-6 shadow-sm;
+  }
+  .card-header {
+    @apply text-2xl font-semibold text-co-gray-900 mb-4;
+  }
+  .form-input {
+    @apply w-full px-4 py-3 border border-co-gray-100 rounded shadow-sm focus:outline-none focus:border-co-blue-light focus:ring-4 focus:ring-co-blue-light/10 transition-all;
+  }
+  .form-label {
+    @apply block text-sm font-semibold text-co-gray-900 mb-2;
+  }
+
+  /* Status pills */
+  .status-pill {
+    @apply px-2 py-0.5 rounded-full text-[10px] uppercase font-bold;
+  }
+  .status-open {
+    @apply bg-green-100 text-green-800;
+  }
+  .status-closed {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  .status-archived {
+    @apply bg-gray-100 text-gray-600;
+  }
+
+  /* Kebab menu */
+  .kebab-btn {
+    @apply p-2 rounded-full text-co-gray-500 hover:bg-co-gray-100 hover:text-co-gray-700 transition-colors;
+  }
+
+  /* Floating menu */
+  .floating-menu {
+    @apply absolute z-50 bg-white rounded-lg shadow-lg border border-co-gray-100 py-2 min-w-[160px];
+  }
+  .floating-menu button {
+    @apply w-full px-4 py-2 text-left text-sm hover:bg-co-gray-50 transition-colors;
+  }
+
+  /* Notes editor */
+  .notes-editor {
+    @apply text-sm text-co-gray-600 p-2 rounded border border-transparent hover:border-co-gray-100 focus:border-co-blue-light focus:outline-none min-h-[40px] max-w-xs;
+  }
+
+  /* Table styles */
+  .data-table {
+    @apply w-full;
+  }
+  .data-table th {
+    @apply px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-co-gray-600 bg-co-gray-50;
+  }
+  .data-table td {
+    @apply px-6 py-4 whitespace-nowrap;
+  }
+  .data-table tbody tr {
+    @apply hover:bg-co-gray-50/50 transition-colors border-b border-co-gray-100;
+  }
+}
+
+/* Test Cases Editor specific styles */
+@layer components {
+  .editor-container {
+    @apply flex bg-white;
+    height: calc(100vh - 64px);
+  }
+
+  .sidebar-tabs {
+    @apply w-[300px] bg-co-gray-50 border-r border-co-gray-100 overflow-y-auto flex flex-col;
+  }
+
+  .sidebar-header {
+    @apply p-5 border-b border-co-gray-100 bg-white sticky top-0 z-10;
+  }
+
+  .case-accordion {
+    @apply border-b border-co-gray-100;
+  }
+
+  .case-header {
+    @apply px-5 py-3 bg-white flex justify-between items-center cursor-pointer select-none transition-colors hover:bg-co-gray-50;
+  }
+
+  .case-title {
+    @apply text-[11px] font-extrabold uppercase text-co-gray-600 tracking-wide;
+  }
+
+  .scenario-tab {
+    @apply py-3 px-5 pl-9 cursor-pointer transition-all border-l-[3px] border-transparent text-[13px] font-semibold text-co-gray-700;
+  }
+  .scenario-tab:hover {
+    @apply bg-co-gray-100 text-co-blue;
+  }
+  .scenario-tab.active {
+    @apply bg-blue-50 text-co-blue border-l-co-blue font-bold;
+  }
+
+  .main-editor {
+    @apply flex-1 flex flex-col overflow-hidden;
+  }
+
+  .editor-header {
+    @apply px-6 py-4 border-b border-co-gray-100 flex justify-between items-center bg-white;
+  }
+
+  .steps-wrapper {
+    @apply flex-1 overflow-auto relative;
+  }
+
+  .steps-table {
+    @apply w-full border-collapse;
+    table-layout: fixed;
+  }
+  .steps-table th {
+    @apply sticky top-0 bg-co-gray-50 text-[10px] font-bold uppercase text-co-gray-600 text-left px-4 py-3 border-b-2 border-co-gray-100 z-10;
+  }
+  .steps-table td {
+    @apply p-0 border-b border-co-gray-100 h-12;
+  }
+  .steps-table tr:hover td {
+    @apply bg-co-gray-50/50;
+  }
+
+  .cell-input {
+    @apply w-full h-full border-none bg-transparent px-4 py-3 text-[13px] text-co-gray-900 outline-none block;
+  }
+  .cell-input:focus {
+    @apply bg-white shadow-[inset_0_0_0_2px_#004879] relative z-50;
+  }
+
+  .select-container {
+    @apply relative h-full flex items-center;
+  }
+
+  .custom-select {
+    @apply appearance-none w-full h-full border-none bg-transparent px-4 py-3 pr-10 text-[13px] text-co-blue font-semibold cursor-pointer outline-none;
+  }
+
+  .pencil-btn {
+    @apply absolute right-3 text-co-gray-500 cursor-pointer p-1 rounded transition-all hover:text-co-blue hover:bg-co-gray-100;
+  }
+
+  .select-config-btn,
+  .match-config-btn {
+    @apply absolute right-3 text-co-gray-500 cursor-pointer p-1 rounded transition-all hover:text-co-blue hover:bg-co-gray-100;
+  }
+}
+
+/* Modal styles */
+@layer components {
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/40 z-[10000] flex items-center justify-center;
+  }
+
+  .modal-card {
+    @apply bg-white rounded-xl w-full max-w-lg shadow-2xl;
+  }
+
+  .modal-header {
+    @apply bg-co-blue text-white px-6 py-4 flex justify-between items-center rounded-t-xl;
+  }
+
+  .modal-body {
+    @apply p-6;
+  }
+
+  .textarea-full {
+    @apply w-full h-48 border-2 border-co-gray-100 rounded-lg p-3 font-mono text-[13px] outline-none resize-y focus:border-co-blue;
+  }
+}
+
+/* Skeleton loading */
+@layer components {
+  .skeleton-bone {
+    @apply h-3 bg-co-gray-100 rounded overflow-hidden relative;
+  }
+  .skeleton-bone::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Editable title */
+.editable-title {
+  @apply outline-none min-w-[50px];
+}
+.editable-title:focus {
+  @apply bg-white shadow-[0_0_0_2px_rgba(0,72,121,0.1)];
+}
+
+/* Trash button */
+.trash-btn {
+  @apply ml-1 p-1.5 text-co-gray-500 rounded transition-all flex items-center justify-center border-none bg-transparent cursor-pointer hover:bg-red-50 hover:text-red-600;
+}
+
+/* Combo buttons in sidebar */
+.combo-buttons {
+  @apply flex gap-2;
+}
+.combo-buttons button {
+  @apply flex-1 whitespace-nowrap py-2 px-1 text-[10px];
+}
