@@ -29,6 +29,7 @@ import exportRoutes from './routes/export.js';
 import selectConfigRoutes from './routes/select-configs.js';
 import matchConfigRoutes from './routes/match-configs.js';
 import categoryRoutes from './routes/categories.js';
+import testRunRoutes from './routes/test-runs.js';
 
 // Middleware
 app.use(helmet({
@@ -74,6 +75,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/select-configs', selectConfigRoutes);
 app.use('/api/match-configs', matchConfigRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/test-runs', testRunRoutes);
 
 // SPA fallback - serve index.html for non-API routes in production
 if (isProduction) {

@@ -26,6 +26,7 @@ import {
   TypeConfigModal,
   SelectConfigModal,
   MatchConfigModal,
+  TestRunModal,
 } from '../../components/test-cases';
 import { ConfirmModal, LoadingSpinner } from '../../components/common';
 import { useTestCasesPage } from './hooks/useTestCasesPage';
@@ -110,6 +111,10 @@ function TestCases() {
     handleSaveTypeConfig,
     closeTypeConfigModal,
     setTypeConfigOptions,
+
+    // Test run
+    handleRunTest,
+    closeTestRunModal,
   } = useTestCasesPage();
 
   // DnD sensors for drag and drop
@@ -192,7 +197,7 @@ function TestCases() {
             )}
           </div>
           <div className="flex gap-3">
-            <button className="btn-outline btn-sm flex items-center gap-1">
+            <button onClick={handleRunTest} className="btn-outline btn-sm flex items-center gap-1">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
@@ -358,6 +363,20 @@ function TestCases() {
         title="Delete Step?"
         message="Are you sure you want to delete this step? This cannot be undone."
         confirmText="Delete Step"
+      />
+
+      <TestRunModal
+        isOpen={modals.testRun.open}
+        status={modals.testRun.status}
+        currentScenario={modals.testRun.currentScenario}
+        totalScenarios={modals.testRun.totalScenarios}
+        scenarioName={modals.testRun.scenarioName}
+        caseName={modals.testRun.caseName}
+        currentStep={modals.testRun.currentStep}
+        totalSteps={modals.testRun.totalSteps}
+        stepDefinition={modals.testRun.stepDefinition}
+        results={modals.testRun.results}
+        onClose={closeTestRunModal}
       />
     </div>
   );

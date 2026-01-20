@@ -28,13 +28,16 @@ export const initRegistrySchema = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_id INTEGER NOT NULL,
       test_set_id INTEGER,
+      test_set_name VARCHAR(255),
       status VARCHAR(20) CHECK(status IN ('passed', 'failed', 'running')),
       executed_by VARCHAR(255),
       executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       duration_ms INTEGER DEFAULT 0,
-      total_tests INTEGER DEFAULT 0,
-      passed_tests INTEGER DEFAULT 0,
-      failed_tests INTEGER DEFAULT 0,
+      total_scenarios INTEGER DEFAULT 0,
+      total_steps INTEGER DEFAULT 0,
+      passed_steps INTEGER DEFAULT 0,
+      failed_steps INTEGER DEFAULT 0,
+      failed_details TEXT,
       FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE
     );
 
@@ -84,6 +87,29 @@ export const initRegistrySchema = () => {
     CREATE INDEX IF NOT EXISTS idx_categories_path ON categories(path);
     CREATE INDEX IF NOT EXISTS idx_categories_lft_rgt ON categories(lft, rgt);
   `);
+
+  // Migration: Add new columns to test_runs if they don't exist
+  const columns = db.prepare("PRAGMA table_info(test_runs)").all();
+  const columnNames = columns.map(c => c.name);
+
+  if (!columnNames.includes('test_set_name')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN test_set_name VARCHAR(255)');
+  }
+  if (!columnNames.includes('total_scenarios')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN total_scenarios INTEGER DEFAULT 0');
+  }
+  if (!columnNames.includes('total_steps')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN total_steps INTEGER DEFAULT 0');
+  }
+  if (!columnNames.includes('passed_steps')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN passed_steps INTEGER DEFAULT 0');
+  }
+  if (!columnNames.includes('failed_steps')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN failed_steps INTEGER DEFAULT 0');
+  }
+  if (!columnNames.includes('failed_details')) {
+    db.exec('ALTER TABLE test_runs ADD COLUMN failed_details TEXT');
+  }
 };
 
 /**

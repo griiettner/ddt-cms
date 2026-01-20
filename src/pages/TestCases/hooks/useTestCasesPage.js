@@ -2,7 +2,7 @@
  * TestCases Page Hook
  * Combines TanStack Query with local store state
  */
-import { useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useSearch } from '@tanstack/react-router';
 import {
   useScenariosQuery,
@@ -28,6 +28,8 @@ import {
 } from '../../../hooks/mutations';
 import { useRelease } from '../../../context/ReleaseContext';
 import { useTestCasesStore } from '../stores/testCasesStore';
+import { runAllScenarios } from '../../../../temp/testRunner';
+import { testStepsApi, testRunsApi } from '../../../services/api';
 
 export function useTestCasesPage() {
   const { testSetId } = useSearch({ strict: false });
@@ -63,6 +65,10 @@ export function useTestCasesPage() {
     closeDeleteCaseConfirm,
     openDeleteStepConfirm,
     closeDeleteStepConfirm,
+    openTestRunModal,
+    updateTestRunProgress,
+    setTestRunResults,
+    closeTestRunModal,
   } = useTestCasesStore();
 
   // Queries
@@ -395,6 +401,81 @@ export function useTestCasesPage() {
     setMatchConfigField('options', cfg?.options.join('\n') || '');
   };
 
+  // Run test simulation for all cases and scenarios
+  const handleRunTest = useCallback(async () => {
+    if (scenarios.length === 0) {
+      alert('No scenarios to run. Please create at least one scenario with steps.');
+      return;
+    }
+
+    openTestRunModal(scenarios.length);
+
+    try {
+      // Fetch steps for all scenarios
+      const scenariosWithSteps = await Promise.all(
+        scenarios.map(async (scenario) => {
+          try {
+            const res = await testStepsApi.list(selectedReleaseId, { scenarioId: scenario.id });
+            return {
+              ...scenario,
+              steps: res.data || [],
+            };
+          } catch (err) {
+            console.error(`Failed to fetch steps for scenario ${scenario.id}`, err);
+            return {
+              ...scenario,
+              steps: [],
+            };
+          }
+        })
+      );
+
+      // Run all scenarios
+      const results = await runAllScenarios(scenariosWithSteps, (progress) => {
+        updateTestRunProgress(progress);
+      });
+      setTestRunResults(results);
+
+      // Save test run to database
+      const failedDetails = results.scenarios?.flatMap(s =>
+        s.steps?.filter(step => step.status === 'failed').map(step => ({
+          stepId: step.stepId,
+          stepDefinition: step.stepDefinition,
+          scenarioName: s.scenarioName,
+          caseName: s.caseName,
+          error: step.error,
+        })) || []
+      ) || [];
+
+      try {
+        await testRunsApi.create({
+          releaseId: selectedReleaseId,
+          testSetId: testSetId,
+          testSetName: testSetName,
+          status: results.failed > 0 ? 'failed' : 'passed',
+          durationMs: results.duration,
+          totalScenarios: results.totalScenarios,
+          totalSteps: results.totalSteps,
+          passedSteps: results.passed,
+          failedSteps: results.failed,
+          failedDetails: failedDetails,
+        });
+      } catch (saveErr) {
+        console.error('Failed to save test run', saveErr);
+      }
+    } catch (err) {
+      console.error('Test run failed', err);
+      setTestRunResults({
+        totalScenarios: scenarios.length,
+        totalSteps: 0,
+        passed: 0,
+        failed: 0,
+        scenarios: [],
+        duration: 0,
+      });
+    }
+  }, [scenarios, selectedReleaseId, testSetId, testSetName, openTestRunModal, updateTestRunProgress, setTestRunResults]);
+
   return {
     // Route params
     testSetId,
@@ -474,6 +555,10 @@ export function useTestCasesPage() {
     handleSaveTypeConfig,
     closeTypeConfigModal,
     setTypeConfigOptions,
+
+    // Test run
+    handleRunTest,
+    closeTestRunModal,
   };
 }
 

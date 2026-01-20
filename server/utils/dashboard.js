@@ -7,10 +7,22 @@ import { getRegistryDb, getReleaseDb } from '../db/database.js';
 export const getDashboardStats = (releaseId) => {
   const registry = getRegistryDb();
 
+  // Helper to parse recent runs
+  const parseRecentRuns = (runs) => runs.map(run => ({
+    ...run,
+    failed_details: run.failed_details ? JSON.parse(run.failed_details) : [],
+  }));
+
   if (!releaseId) {
     // If no release selected, return global stats from registry
     const totalReleases = registry.prepare('SELECT COUNT(*) as count FROM releases').get().count;
-    const recentRuns = registry.prepare('SELECT * FROM test_runs ORDER BY executed_at DESC LIMIT 5').all();
+    const recentRunsRaw = registry.prepare(`
+      SELECT tr.*, r.release_number
+      FROM test_runs tr
+      LEFT JOIN releases r ON tr.release_id = r.id
+      ORDER BY tr.executed_at DESC LIMIT 10
+    `).all();
+    const recentRuns = parseRecentRuns(recentRunsRaw);
 
     return {
       totalReleases,
@@ -31,13 +43,20 @@ export const getDashboardStats = (releaseId) => {
   const totalScenarios = db.prepare('SELECT COUNT(*) as count FROM test_scenarios').get().count;
   const totalSteps = db.prepare('SELECT COUNT(*) as count FROM test_steps').get().count;
 
-  // Get recent runs
-  const recentRuns = registry.prepare('SELECT * FROM test_runs WHERE release_id = ? ORDER BY executed_at DESC LIMIT 5').all(releaseId);
+  // Get recent runs for this release
+  const recentRunsRaw = registry.prepare(`
+    SELECT tr.*, r.release_number
+    FROM test_runs tr
+    LEFT JOIN releases r ON tr.release_id = r.id
+    WHERE tr.release_id = ?
+    ORDER BY tr.executed_at DESC LIMIT 10
+  `).all(releaseId);
+  const recentRuns = parseRecentRuns(recentRunsRaw);
 
   // Get pass/fail from last test run
   const lastRun = recentRuns.length > 0 ? recentRuns[0] : null;
-  const lastRunPassed = lastRun?.passed_tests || 0;
-  const lastRunFailed = lastRun?.failed_tests || 0;
+  const lastRunPassed = lastRun?.passed_steps || 0;
+  const lastRunFailed = lastRun?.failed_steps || 0;
 
   return {
     totalTestSets,

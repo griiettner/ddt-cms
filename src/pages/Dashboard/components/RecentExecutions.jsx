@@ -1,48 +1,78 @@
 /**
  * Recent Executions Component
+ * Shows the last 10 test runs
  */
+
+function formatDuration(ms) {
+  if (!ms) return '-';
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = (ms / 1000).toFixed(1);
+  return `${seconds}s`;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 function RecentExecutions({ recentRuns }) {
   return (
     <div className="card">
-      <h2 className="card-header">Recent Executions</h2>
+      <h2 className="card-header">Recent Test Runs</h2>
       <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
               <th>Test Set</th>
               <th>Status</th>
-              <th>Date</th>
+              <th>Scenarios</th>
               <th>Results</th>
+              <th>Duration</th>
+              <th>Date</th>
             </tr>
           </thead>
           <tbody>
             {recentRuns && recentRuns.length > 0 ? (
-              recentRuns.map((run, i) => (
-                <tr key={i}>
+              recentRuns.map((run) => (
+                <tr key={run.id}>
                   <td className="font-medium text-co-gray-900">
-                    {run.test_set_id || 'Global'}
+                    {run.test_set_name || `Test Set #${run.test_set_id}` || 'All Tests'}
                   </td>
                   <td>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       run.status === 'passed'
-                        ? 'bg-success-light text-success'
-                        : 'bg-error-light text-error'
+                        ? 'bg-green-100 text-green-700'
+                        : run.status === 'failed'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {run.status}
+                      {run.status || 'unknown'}
                     </span>
                   </td>
                   <td className="text-co-gray-700">
-                    {new Date(run.executed_at).toLocaleDateString()}
+                    {run.total_scenarios || 0}
                   </td>
                   <td className="text-co-gray-700">
-                    {run.passed_tests}/{run.total_tests} Passed
+                    <span className="text-green-600 font-medium">{run.passed_steps || 0}</span>
+                    <span className="text-co-gray-400 mx-1">/</span>
+                    <span className="text-co-gray-600">{run.total_steps || 0}</span>
+                    {run.failed_steps > 0 && (
+                      <span className="text-red-500 ml-2">({run.failed_steps} failed)</span>
+                    )}
+                  </td>
+                  <td className="text-co-gray-500 text-sm">
+                    {formatDuration(run.duration_ms)}
+                  </td>
+                  <td className="text-co-gray-500 text-sm">
+                    {formatDate(run.executed_at)}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="text-center text-co-gray-500 italic py-12">
-                  No execution history found.
+                <td colSpan="6" className="text-center text-co-gray-500 italic py-12">
+                  No test runs recorded yet. Run a test to see results here.
                 </td>
               </tr>
             )}

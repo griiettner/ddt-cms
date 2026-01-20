@@ -252,4 +252,20 @@ export const healthApi = {
   },
 };
 
+export const testRunsApi = {
+  list(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return api.get(`/test-runs${query ? `?${query}` : ''}`);
+  },
+  get(id) {
+    return api.get(`/test-runs/${id}`);
+  },
+  create(data) {
+    return api.post('/test-runs', data);
+  },
+  update(id, data) {
+    return api.patch(`/test-runs/${id}`, data);
+  },
+};
+
 export default api;

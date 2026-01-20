@@ -31,6 +31,18 @@ export const testCasesStore = new Store({
     deleteConfirm: { open: false },
     deleteCaseConfirm: { open: false, caseId: null, caseName: '' },
     deleteStepConfirm: { open: false, stepId: null },
+    testRun: {
+      open: false,
+      status: 'idle', // idle, running, complete
+      currentScenario: 0,
+      totalScenarios: 0,
+      scenarioName: '',
+      caseName: '',
+      currentStep: 0,
+      totalSteps: 0,
+      stepDefinition: '',
+      results: null,
+    },
   },
 });
 
@@ -313,6 +325,82 @@ export const testCasesActions = {
     }));
   },
 
+  // Test Run Modal
+  openTestRunModal: (totalScenarios) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        testRun: {
+          open: true,
+          status: 'running',
+          currentScenario: 0,
+          totalScenarios,
+          scenarioName: '',
+          caseName: '',
+          currentStep: 0,
+          totalSteps: 0,
+          stepDefinition: '',
+          results: null,
+        },
+      },
+    }));
+  },
+
+  updateTestRunProgress: (progress) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        testRun: {
+          ...state.modals.testRun,
+          currentScenario: progress.currentScenario,
+          totalScenarios: progress.totalScenarios,
+          scenarioName: progress.scenarioName,
+          caseName: progress.caseName,
+          currentStep: progress.currentStep,
+          totalSteps: progress.totalSteps,
+          stepDefinition: progress.stepDefinition,
+        },
+      },
+    }));
+  },
+
+  setTestRunResults: (results) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        testRun: {
+          ...state.modals.testRun,
+          status: 'complete',
+          results,
+        },
+      },
+    }));
+  },
+
+  closeTestRunModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        testRun: {
+          open: false,
+          status: 'idle',
+          currentScenario: 0,
+          totalScenarios: 0,
+          scenarioName: '',
+          caseName: '',
+          currentStep: 0,
+          totalSteps: 0,
+          stepDefinition: '',
+          results: null,
+        },
+      },
+    }));
+  },
+
   // Reset store
   reset: () => {
     testCasesStore.setState({
@@ -340,6 +428,18 @@ export const testCasesActions = {
         deleteConfirm: { open: false },
         deleteCaseConfirm: { open: false, caseId: null, caseName: '' },
         deleteStepConfirm: { open: false, stepId: null },
+        testRun: {
+          open: false,
+          status: 'idle',
+          currentScenario: 0,
+          totalScenarios: 0,
+          scenarioName: '',
+          caseName: '',
+          currentStep: 0,
+          totalSteps: 0,
+          stepDefinition: '',
+          results: null,
+        },
       },
     });
   },
