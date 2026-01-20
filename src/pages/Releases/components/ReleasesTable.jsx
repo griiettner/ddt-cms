@@ -1,7 +1,9 @@
 /**
  * Releases Table Component
  */
+import { Link } from '@tanstack/react-router';
 import { StatusBadge, KebabMenu, Pagination } from '../../../components/common';
+import { toReleaseSlug } from '../../../lib/urlUtils';
 
 function ReleasesTable({
   releases,
@@ -39,7 +41,15 @@ function ReleasesTable({
             ) : (
               releases.map((r) => (
                 <tr key={r.id}>
-                  <td className="font-bold text-co-blue">{r.release_number}</td>
+                  <td className="font-bold">
+                    <Link
+                      to="/$releaseId"
+                      params={{ releaseId: toReleaseSlug(r.release_number) }}
+                      className="text-co-blue hover:text-co-blue-hover hover:underline"
+                    >
+                      {r.release_number}
+                    </Link>
+                  </td>
                   <td className="text-co-gray-600">{r.description || '-'}</td>
                   <td>
                     <div
