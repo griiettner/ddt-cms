@@ -41,22 +41,44 @@ import testRunRoutes from './routes/test-runs.js';
 // Middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for POC/development convenience if needed
+  crossOriginResourcePolicy: false,
 }));
+
+// CORS - handle preflight explicitly
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*'
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Authenticated-User', 'Remote-User'],
+  credentials: true,
 }));
+
+// Handle OPTIONS preflight for all routes
+app.options('*', cors());
+
+// Request logging - BEFORE body parsing to catch all requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.method === 'OPTIONS') {
+    console.log('  -> CORS Preflight request');
+  }
+  next();
+});
+
 app.use(express.json());
+
+// Log body after parsing
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log('  -> Body:', JSON.stringify(req.body));
+  }
+  next();
+});
+
 // Serve static files - in production serve from dist, in dev Vite handles it
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
   app.use(express.static(path.join(__dirname, '../dist')));
 }
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
 
 // Basic Identification Middleware mock (per documentation)
 app.use((req, res, next) => {
