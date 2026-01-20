@@ -1,5 +1,6 @@
 import { Link, useRouterState, useParams } from '@tanstack/react-router';
 import { useAuth } from '../../context/AuthContext';
+import logo from '../../assets/images/logo.png';
 
 function Navbar() {
   const { user } = useAuth();
@@ -26,8 +27,11 @@ function Navbar() {
   return (
     <nav className="bg-co-blue text-white h-16 flex items-center px-6 shadow-md shrink-0">
       <div className="flex items-center gap-8 flex-1">
-        <Link to="/" className="text-xl font-bold tracking-tight hover:text-white/90">
-          Test Builder
+        <Link to="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+          <div className="bg-white rounded-lg p-1.5">
+            <img src={logo} alt="Test Builder" className="h-8 w-auto" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">Test Builder</span>
         </Link>
         <div className="flex items-center gap-1">
           {/* Dashboard */}
