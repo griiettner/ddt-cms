@@ -1,3 +1,5 @@
+console.log('=== SERVER STARTING ===');
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,6 +9,8 @@ import { fileURLToPath } from 'url';
 
 // Load environment variables
 dotenv.config();
+
+console.log('=== IMPORTS LOADED ===');
 
 import { initRegistrySchema } from './db/migrations.js';
 
@@ -26,17 +30,29 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+console.log('=== LOADING ROUTES ===');
 import releaseRoutes from './routes/releases.js';
+console.log('  - releases loaded');
 import dashboardRoutes from './routes/dashboard.js';
+console.log('  - dashboard loaded');
 import testSetRoutes from './routes/test-sets.js';
+console.log('  - test-sets loaded');
 import testCaseRoutes from './routes/test-cases.js';
+console.log('  - test-cases loaded');
 import testStepRoutes from './routes/test-steps.js';
+console.log('  - test-steps loaded');
 import configRoutes from './routes/config.js';
+console.log('  - config loaded');
 import exportRoutes from './routes/export.js';
+console.log('  - export loaded');
 import selectConfigRoutes from './routes/select-configs.js';
+console.log('  - select-configs loaded');
 import matchConfigRoutes from './routes/match-configs.js';
+console.log('  - match-configs loaded');
 import categoryRoutes from './routes/categories.js';
+console.log('  - categories loaded');
 import testRunRoutes from './routes/test-runs.js';
+console.log('=== ALL ROUTES LOADED ===');
 
 // Middleware
 app.use(helmet({
@@ -139,6 +155,9 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
+  console.log('=== SERVER READY ===');
   console.log(`Test Builder server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Serve Static: ${process.env.SERVE_STATIC || 'false'}`);
+  console.log('Waiting for requests...');
 });
