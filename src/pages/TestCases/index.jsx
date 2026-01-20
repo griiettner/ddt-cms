@@ -2,7 +2,22 @@
  * TestCases Page
  * Smart hooks + dumb components architecture
  */
+import { useCallback } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import {
   StepRow,
   ScenarioSidebar,
@@ -50,6 +65,12 @@ function TestCases() {
     closeCaseModal,
     setCaseModalName,
 
+    // Case edit/delete
+    handleEditCase,
+    handleDeleteCase,
+    confirmDeleteCase,
+    closeDeleteCaseConfirm,
+
     // Scenario modal
     handleOpenScenarioModal,
     handleSubmitScenario,
@@ -65,6 +86,10 @@ function TestCases() {
     // Step actions
     handleUpdateStepField,
     handleAddStep,
+    handleDeleteStep,
+    confirmDeleteStep,
+    closeDeleteStepConfirm,
+    handleReorderSteps,
 
     // Select config modal
     handleOpenSelectConfigModal,
@@ -86,6 +111,26 @@ function TestCases() {
     closeTypeConfigModal,
     setTypeConfigOptions,
   } = useTestCasesPage();
+
+  // DnD sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end to reorder steps
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = steps.findIndex((s) => s.id === active.id);
+      const newIndex = steps.findIndex((s) => s.id === over.id);
+      const reorderedSteps = arrayMove(steps, oldIndex, newIndex);
+      handleReorderSteps(reorderedSteps);
+    }
+  }, [steps, handleReorderSteps]);
 
   if (!testSetId || !selectedReleaseId) {
     return (
@@ -118,6 +163,8 @@ function TestCases() {
         toggleCase={toggleCase}
         onAddCase={handleOpenCaseModal}
         onAddScenario={handleOpenScenarioModal}
+        onEditCase={handleEditCase}
+        onDeleteCase={handleDeleteCase}
       />
 
       <div className="main-editor">
@@ -173,43 +220,57 @@ function TestCases() {
                 </div>
               )}
 
-              <table className="steps-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 250 }}>Step Definition</th>
-                    <th style={{ width: 150 }}>Type</th>
-                    <th style={{ width: 150 }}>ID</th>
-                    <th style={{ width: 150 }}>Action</th>
-                    <th style={{ width: 180 }}>Action Result</th>
-                    <th style={{ width: 80 }}>Req</th>
-                    <th>Expected Results</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {steps.length === 0 && !selectedScenarioId ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <table className="steps-table">
+                  <thead>
                     <tr>
-                      <td colSpan="7" className="text-center text-co-gray-400 italic py-20">
-                        Select a scenario from the left to view steps.
-                      </td>
+                      <th style={{ width: 40 }}></th>
+                      <th style={{ width: 250 }}>Step Definition</th>
+                      <th style={{ width: 150 }}>Type</th>
+                      <th style={{ width: 150 }}>ID</th>
+                      <th style={{ width: 150 }}>Action</th>
+                      <th style={{ width: 180 }}>Action Result</th>
+                      <th style={{ width: 80 }}>Req</th>
+                      <th>Expected Results</th>
+                      <th style={{ width: 50 }}></th>
                     </tr>
-                  ) : (
-                    steps.map(step => (
-                      <StepRow
-                        key={step.id}
-                        step={step}
-                        config={config}
-                        selectConfigs={selectConfigs}
-                        matchConfigs={matchConfigs}
-                        actionOptions={actionOptions}
-                        onFieldChange={handleUpdateStepField}
-                        onOpenSelectConfig={handleOpenSelectConfigModal}
-                        onOpenMatchConfig={handleOpenMatchConfigModal}
-                        onOpenTypeConfig={handleOpenTypeConfigModal}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {steps.length === 0 && !selectedScenarioId ? (
+                      <tr>
+                        <td colSpan="9" className="text-center text-co-gray-400 italic py-20">
+                          Select a scenario from the left to view steps.
+                        </td>
+                      </tr>
+                    ) : (
+                      <SortableContext
+                        items={steps.map(s => s.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {steps.map(step => (
+                          <StepRow
+                            key={step.id}
+                            step={step}
+                            config={config}
+                            selectConfigs={selectConfigs}
+                            matchConfigs={matchConfigs}
+                            actionOptions={actionOptions}
+                            onFieldChange={handleUpdateStepField}
+                            onOpenSelectConfig={handleOpenSelectConfigModal}
+                            onOpenMatchConfig={handleOpenMatchConfigModal}
+                            onOpenTypeConfig={handleOpenTypeConfigModal}
+                            onDeleteStep={handleDeleteStep}
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </tbody>
+                </table>
+              </DndContext>
             </>
           )}
         </div>
@@ -277,6 +338,24 @@ function TestCases() {
         title="Delete Scenario?"
         message={`Are you sure you want to delete "${selectedScenario?.name}"? This will permanently remove all associated test steps.`}
         confirmText="Delete Scenario"
+      />
+
+      <ConfirmModal
+        isOpen={modals.deleteCaseConfirm.open}
+        onClose={closeDeleteCaseConfirm}
+        onConfirm={confirmDeleteCase}
+        title="Delete Test Case?"
+        message={`Are you sure you want to delete "${modals.deleteCaseConfirm.caseName}" and all its scenarios and steps? This cannot be undone.`}
+        confirmText="Delete Test Case"
+      />
+
+      <ConfirmModal
+        isOpen={modals.deleteStepConfirm.open}
+        onClose={closeDeleteStepConfirm}
+        onConfirm={confirmDeleteStep}
+        title="Delete Step?"
+        message="Are you sure you want to delete this step? This cannot be undone."
+        confirmText="Delete Step"
       />
     </div>
   );

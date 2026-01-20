@@ -29,6 +29,8 @@ export const testCasesStore = new Store({
       options: '',
     },
     deleteConfirm: { open: false },
+    deleteCaseConfirm: { open: false, caseId: null, caseName: '' },
+    deleteStepConfirm: { open: false, stepId: null },
   },
 });
 
@@ -269,6 +271,48 @@ export const testCasesActions = {
     }));
   },
 
+  // Delete Case Confirm Modal
+  openDeleteCaseConfirm: (caseId, caseName) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteCaseConfirm: { open: true, caseId, caseName },
+      },
+    }));
+  },
+
+  closeDeleteCaseConfirm: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteCaseConfirm: { open: false, caseId: null, caseName: '' },
+      },
+    }));
+  },
+
+  // Delete Step Confirm Modal
+  openDeleteStepConfirm: (stepId) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteStepConfirm: { open: true, stepId },
+      },
+    }));
+  },
+
+  closeDeleteStepConfirm: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteStepConfirm: { open: false, stepId: null },
+      },
+    }));
+  },
+
   // Reset store
   reset: () => {
     testCasesStore.setState({
@@ -294,6 +338,8 @@ export const testCasesActions = {
           options: '',
         },
         deleteConfirm: { open: false },
+        deleteCaseConfirm: { open: false, caseId: null, caseName: '' },
+        deleteStepConfirm: { open: false, stepId: null },
       },
     });
   },

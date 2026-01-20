@@ -125,6 +125,12 @@ export const testCasesApi = {
   create(releaseId, data) {
     return api.post(`/test-cases/${releaseId}`, data);
   },
+  update(releaseId, id, data) {
+    return api.patch(`/test-cases/${releaseId}/${id}`, data);
+  },
+  delete(releaseId, id) {
+    return api.delete(`/test-cases/${releaseId}/${id}`);
+  },
   getAllScenarios(releaseId, params = {}) {
     const query = new URLSearchParams(params).toString();
     return api.get(`/test-cases/all-scenarios/${releaseId}${query ? `?${query}` : ''}`);
@@ -147,6 +153,9 @@ export const testStepsApi = {
   },
   update(releaseId, stepId, data) {
     return api.patch(`/test-steps/${releaseId}/${stepId}`, data);
+  },
+  delete(releaseId, stepId) {
+    return api.delete(`/test-steps/${releaseId}/${stepId}`);
   },
   sync(releaseId, data) {
     return api.post(`/test-steps/${releaseId}/sync`, data);
@@ -201,6 +210,27 @@ export const matchConfigsApi = {
   },
   delete(id) {
     return api.delete(`/match-configs/${id}`);
+  },
+};
+
+export const categoriesApi = {
+  list() {
+    return api.get('/categories');
+  },
+  listFlat() {
+    return api.get('/categories/flat');
+  },
+  get(id) {
+    return api.get(`/categories/${id}`);
+  },
+  create(data) {
+    return api.post('/categories', data);
+  },
+  update(id, data) {
+    return api.patch(`/categories/${id}`, data);
+  },
+  delete(id) {
+    return api.delete(`/categories/${id}`);
   },
 };
 

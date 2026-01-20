@@ -25,6 +25,7 @@ function TestSetsTable({
           <thead>
             <tr>
               <th>Name</th>
+              <th>Category</th>
               <th>Description</th>
               <th className="text-center">Cases</th>
               <th className="text-center">Scenarios</th>
@@ -35,7 +36,7 @@ function TestSetsTable({
           <tbody>
             {testSets.length === 0 ? (
               <tr>
-                <td colSpan="6" className="text-center text-co-gray-500 italic py-10">
+                <td colSpan="7" className="text-center text-co-gray-500 italic py-10">
                   No test sets found for this release.
                 </td>
               </tr>
@@ -51,6 +52,11 @@ function TestSetsTable({
                     >
                       {ts.name}
                     </Link>
+                  </td>
+                  <td className="text-co-gray-600 text-sm">
+                    {ts.category?.name || (
+                      <span className="text-co-gray-400 italic">Uncategorized</span>
+                    )}
                   </td>
                   <td className="text-co-gray-600 max-w-xs truncate">
                     {ts.description || '-'}

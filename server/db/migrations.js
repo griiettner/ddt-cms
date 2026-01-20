@@ -64,6 +64,25 @@ export const initRegistrySchema = () => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_match_configs_name ON match_configs(name);
+
+    -- Categories for organizing test sets (Joomla-style tree structure)
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      parent_id INTEGER,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      path TEXT NOT NULL DEFAULT '',
+      level INTEGER NOT NULL DEFAULT 0,
+      lft INTEGER NOT NULL DEFAULT 0,
+      rgt INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_categories_path ON categories(path);
+    CREATE INDEX IF NOT EXISTS idx_categories_lft_rgt ON categories(lft, rgt);
   `);
 };
 
@@ -78,6 +97,7 @@ export const initReleaseSchema = (dbPath) => {
     CREATE TABLE IF NOT EXISTS test_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_id INTEGER NOT NULL,
+      category_id INTEGER,
       name VARCHAR(255) NOT NULL,
       description TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +105,7 @@ export const initReleaseSchema = (dbPath) => {
     );
 
     CREATE INDEX IF NOT EXISTS idx_test_sets_release ON test_sets(release_id);
+    CREATE INDEX IF NOT EXISTS idx_test_sets_category ON test_sets(category_id);
 
     CREATE TABLE IF NOT EXISTS test_cases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

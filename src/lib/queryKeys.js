@@ -70,6 +70,14 @@ export const queryKeys = {
     detail: (id) => ['matchConfigs', 'detail', id],
   },
 
+  // Categories (global, not release-specific)
+  categories: {
+    all: ['categories'],
+    list: () => ['categories', 'list'],
+    flat: () => ['categories', 'flat'],
+    detail: (id) => ['categories', 'detail', id],
+  },
+
   // Dashboard queries
   dashboard: {
     all: (releaseId) => ['dashboard', releaseId],

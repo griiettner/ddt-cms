@@ -26,6 +26,44 @@ export function useCreateTestCase(releaseId) {
 }
 
 /**
+ * Update a test case
+ */
+export function useUpdateTestCase(releaseId) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }) => testCasesApi.update(releaseId, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['scenarios', releaseId]
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.testCases.all(releaseId)
+      });
+    },
+  });
+}
+
+/**
+ * Delete a test case and all its scenarios/steps
+ */
+export function useDeleteTestCase(releaseId) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id) => testCasesApi.delete(releaseId, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['scenarios', releaseId]
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.testCases.all(releaseId)
+      });
+    },
+  });
+}
+
+/**
  * Create a new scenario
  */
 export function useCreateScenario(releaseId) {
@@ -103,6 +141,8 @@ export function useDeleteScenario(releaseId) {
 
 export default {
   useCreateTestCase,
+  useUpdateTestCase,
+  useDeleteTestCase,
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,

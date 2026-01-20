@@ -1,4 +1,17 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
+
+// Inline SVG Icons
+const PencilIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+);
+
+const TrashIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
 
 /**
  * ScenarioSidebar - Displays the scenario list grouped by test case
@@ -11,16 +24,49 @@ function ScenarioSidebar({
   toggleCase,
   onAddCase,
   onAddScenario,
+  onEditCase,
+  onDeleteCase,
 }) {
+  const [editingCaseId, setEditingCaseId] = useState(null);
+  const [editCaseName, setEditCaseName] = useState('');
+
   // Group scenarios by case
   const groups = useMemo(() => {
     const g = {};
     scenarios.forEach(s => {
-      if (!g[s.case_name]) g[s.case_name] = [];
-      g[s.case_name].push(s);
+      if (!g[s.test_case_id]) {
+        g[s.test_case_id] = { name: s.case_name, scenarios: [] };
+      }
+      g[s.test_case_id].scenarios.push(s);
     });
     return g;
   }, [scenarios]);
+
+  const startEditingCase = (e, caseId, caseName) => {
+    e.stopPropagation();
+    setEditingCaseId(caseId);
+    setEditCaseName(caseName);
+  };
+
+  const saveEditCase = (caseId) => {
+    if (editCaseName.trim() && onEditCase) {
+      onEditCase(caseId, editCaseName.trim());
+    }
+    setEditingCaseId(null);
+    setEditCaseName('');
+  };
+
+  const cancelEditCase = () => {
+    setEditingCaseId(null);
+    setEditCaseName('');
+  };
+
+  const handleDeleteCase = (e, caseId, caseName) => {
+    e.stopPropagation();
+    if (onDeleteCase) {
+      onDeleteCase(caseId, caseName);
+    }
+  };
 
   return (
     <div className="sidebar-tabs">
@@ -46,22 +92,56 @@ function ScenarioSidebar({
           No scenarios found. Create a test case to get started.
         </div>
       ) : (
-        Object.entries(groups).map(([caseName, caseScenarios]) => (
-          <div key={caseName} className={`case-accordion ${openCases.has(caseName) ? 'open' : ''}`}>
-            <div className="case-header" onClick={() => toggleCase(caseName)}>
-              <span className="case-title">{caseName}</span>
-              <svg
-                className={`w-4 h-4 text-co-gray-500 transition-transform ${openCases.has(caseName) ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
+        Object.entries(groups).map(([caseId, caseData]) => (
+          <div key={caseId} className={`case-accordion ${openCases.has(caseData.name) ? 'open' : ''}`}>
+            <div className="case-header group" onClick={() => editingCaseId !== parseInt(caseId) && toggleCase(caseData.name)}>
+              {editingCaseId === parseInt(caseId) ? (
+                <input
+                  type="text"
+                  value={editCaseName}
+                  onChange={(e) => setEditCaseName(e.target.value)}
+                  onBlur={() => saveEditCase(parseInt(caseId))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveEditCase(parseInt(caseId));
+                    if (e.key === 'Escape') cancelEditCase();
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 px-2 py-1 text-sm border border-co-blue rounded focus:outline-none focus:ring-1 focus:ring-co-blue"
+                  autoFocus
+                />
+              ) : (
+                <>
+                  <span className="case-title flex-1">{caseData.name}</span>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+                    <button
+                      onClick={(e) => startEditingCase(e, parseInt(caseId), caseData.name)}
+                      className="p-1 hover:bg-co-gray-200 rounded"
+                      title="Edit test case"
+                    >
+                      <PencilIcon className="w-3.5 h-3.5 text-co-gray-500" />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteCase(e, parseInt(caseId), caseData.name)}
+                      className="p-1 hover:bg-red-100 rounded"
+                      title="Delete test case"
+                    >
+                      <TrashIcon className="w-3.5 h-3.5 text-red-500" />
+                    </button>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-co-gray-500 transition-transform ${openCases.has(caseData.name) ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
             </div>
-            {openCases.has(caseName) && (
+            {openCases.has(caseData.name) && (
               <div className="bg-co-gray-50">
-                {caseScenarios.map(s => (
+                {caseData.scenarios.map(s => (
                   <div
                     key={s.id}
                     className={`scenario-tab ${selectedScenarioId === s.id ? 'active' : ''}`}

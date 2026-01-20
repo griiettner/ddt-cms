@@ -19,6 +19,8 @@ export {
 
 export {
   useCreateTestCase,
+  useUpdateTestCase,
+  useDeleteTestCase,
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,
@@ -29,6 +31,8 @@ export {
   useUpdateStepFields,
   useAddStep,
   useSyncSteps,
+  useReorderSteps,
+  useDeleteStep,
 } from './useStepMutations';
 
 export {

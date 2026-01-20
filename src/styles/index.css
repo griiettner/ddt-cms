@@ -223,6 +223,14 @@
   @apply ml-1 p-1.5 text-co-gray-500 rounded transition-all flex items-center justify-center border-none bg-transparent cursor-pointer hover:bg-red-50 hover:text-red-600;
 }
 
+/* Drag handle button */
+.drag-handle {
+  @apply p-1.5 text-co-gray-500 rounded transition-all flex items-center justify-center border-none bg-transparent cursor-grab hover:text-co-gray-700 hover:bg-co-gray-100;
+}
+.drag-handle:active {
+  @apply cursor-grabbing;
+}
+
 /* Combo buttons in sidebar */
 .combo-buttons {
   @apply flex gap-2;

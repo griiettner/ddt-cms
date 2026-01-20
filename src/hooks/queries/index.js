@@ -14,3 +14,11 @@ export {
   useAllConfigQuery,
 } from './useConfigQuery';
 export { useDashboardQuery, useExportQuery } from './useDashboardQuery';
+export {
+  useCategoriesQuery,
+  useCategoriesFlatQuery,
+  useCategoryQuery,
+  useCreateCategory,
+  useUpdateCategory,
+  useDeleteCategory,
+} from './useCategoriesQuery';

@@ -13,11 +13,15 @@ import {
 } from '../../../hooks/queries';
 import {
   useCreateTestCase,
+  useUpdateTestCase,
+  useDeleteTestCase,
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,
   useUpdateStepField,
   useAddStep,
+  useDeleteStep,
+  useReorderSteps,
   useUpdateTypes,
   useSaveSelectConfig,
   useSaveMatchConfig,
@@ -55,6 +59,10 @@ export function useTestCasesPage() {
     setMatchConfigField,
     openDeleteConfirm,
     closeDeleteConfirm,
+    openDeleteCaseConfirm,
+    closeDeleteCaseConfirm,
+    openDeleteStepConfirm,
+    closeDeleteStepConfirm,
   } = useTestCasesStore();
 
   // Queries
@@ -87,11 +95,15 @@ export function useTestCasesPage() {
 
   // Mutations
   const createCaseMutation = useCreateTestCase(selectedReleaseId);
+  const updateCaseMutation = useUpdateTestCase(selectedReleaseId);
+  const deleteCaseMutation = useDeleteTestCase(selectedReleaseId);
   const createScenarioMutation = useCreateScenario(selectedReleaseId);
   const updateScenarioMutation = useUpdateScenario(selectedReleaseId);
   const deleteScenarioMutation = useDeleteScenario(selectedReleaseId);
   const updateStepMutation = useUpdateStepField(selectedReleaseId, selectedScenarioId);
   const addStepMutation = useAddStep(selectedReleaseId);
+  const deleteStepMutation = useDeleteStep(selectedReleaseId, selectedScenarioId);
+  const reorderStepsMutation = useReorderSteps(selectedReleaseId, selectedScenarioId);
   const updateTypesMutation = useUpdateTypes(selectedReleaseId);
   const saveSelectConfigMutation = useSaveSelectConfig();
   const saveMatchConfigMutation = useSaveMatchConfig();
@@ -133,6 +145,37 @@ export function useTestCasesPage() {
       if (res.data?.scenarioId) {
         handleSelectScenario(res.data.scenarioId);
       }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Edit test case name
+  const handleEditCase = async (caseId, newName) => {
+    try {
+      await updateCaseMutation.mutateAsync({
+        id: caseId,
+        data: { name: newName },
+      });
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Delete test case - opens confirmation modal
+  const handleDeleteCase = (caseId, caseName) => {
+    openDeleteCaseConfirm(caseId, caseName);
+  };
+
+  // Confirm delete test case - called from modal
+  const confirmDeleteCase = async () => {
+    const { caseId } = modals.deleteCaseConfirm;
+    if (!caseId) return;
+
+    try {
+      await deleteCaseMutation.mutateAsync(caseId);
+      closeDeleteCaseConfirm();
+      clearScenario();
     } catch (err) {
       alert(err.message);
     }
@@ -225,6 +268,33 @@ export function useTestCasesPage() {
       console.error('Failed to add step', err);
     }
   };
+
+  // Delete Step - opens confirmation modal
+  const handleDeleteStep = (stepId) => {
+    openDeleteStepConfirm(stepId);
+  };
+
+  // Confirm delete step - called from modal
+  const confirmDeleteStep = async () => {
+    const { stepId } = modals.deleteStepConfirm;
+    if (!stepId) return;
+
+    try {
+      await deleteStepMutation.mutateAsync(stepId);
+      closeDeleteStepConfirm();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Reorder steps after drag and drop
+  const handleReorderSteps = useCallback(async (reorderedSteps) => {
+    try {
+      await reorderStepsMutation.mutateAsync(reorderedSteps);
+    } catch (err) {
+      console.error('Failed to reorder steps', err);
+    }
+  }, [reorderStepsMutation]);
 
   // Select Config Modal
   const handleOpenSelectConfigModal = useCallback((stepId, configType) => {
@@ -359,6 +429,12 @@ export function useTestCasesPage() {
     closeCaseModal,
     setCaseModalName,
 
+    // Case edit/delete
+    handleEditCase,
+    handleDeleteCase,
+    confirmDeleteCase,
+    closeDeleteCaseConfirm,
+
     // Scenario modal
     handleOpenScenarioModal,
     handleSubmitScenario,
@@ -374,6 +450,10 @@ export function useTestCasesPage() {
     // Step actions
     handleUpdateStepField,
     handleAddStep,
+    handleDeleteStep,
+    confirmDeleteStep,
+    closeDeleteStepConfirm,
+    handleReorderSteps,
 
     // Select config modal
     handleOpenSelectConfigModal,

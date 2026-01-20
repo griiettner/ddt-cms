@@ -33,6 +33,21 @@ export const getRegistryDb = () => {
 };
 
 /**
+ * Run migrations on a release database to ensure schema is up to date
+ * @param {Database} db - The database connection
+ */
+const migrateReleaseDb = (db) => {
+  // Check if category_id column exists in test_sets
+  const tableInfo = db.prepare("PRAGMA table_info(test_sets)").all();
+  const hasCategoryId = tableInfo.some(col => col.name === 'category_id');
+
+  if (!hasCategoryId) {
+    db.exec('ALTER TABLE test_sets ADD COLUMN category_id INTEGER');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_test_sets_category ON test_sets(category_id)');
+  }
+};
+
+/**
  * Initializes and returns a connection to a specific release database
  * @param {string|number} releaseId
  */
@@ -53,7 +68,10 @@ export const getReleaseDb = (releaseId) => {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
-  
+
+  // Run migrations to ensure schema is up to date
+  migrateReleaseDb(db);
+
   releaseDbs.set(releaseId, db);
   return db;
 };

@@ -131,9 +131,81 @@ export function useSyncSteps(releaseId) {
   });
 }
 
+/**
+ * Reorder steps with optimistic update
+ */
+export function useReorderSteps(releaseId, scenarioId) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (reorderedSteps) => {
+      const stepsToSync = reorderedSteps.map((s, index) => ({
+        ...s,
+        order_index: index,
+      }));
+      return testStepsApi.sync(releaseId, { scenarioId, steps: stepsToSync });
+    },
+    onMutate: async (reorderedSteps) => {
+      const queryKey = queryKeys.steps.list(releaseId, scenarioId);
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+
+      // Snapshot the previous value
+      const previousSteps = queryClient.getQueryData(queryKey);
+
+      // Optimistically update with new order
+      queryClient.setQueryData(queryKey, reorderedSteps.map((s, index) => ({
+        ...s,
+        order_index: index,
+      })));
+
+      return { previousSteps };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousSteps) {
+        const queryKey = queryKeys.steps.list(releaseId, scenarioId);
+        queryClient.setQueryData(queryKey, context.previousSteps);
+      }
+    },
+    onSuccess: () => {
+      // Invalidate to get fresh data with correct IDs
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.steps.list(releaseId, scenarioId)
+      });
+    },
+  });
+}
+
+/**
+ * Delete a step
+ */
+export function useDeleteStep(releaseId, scenarioId) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (stepId) => {
+      // Skip temp IDs
+      if (String(stepId).startsWith('temp')) {
+        return { success: true };
+      }
+      return testStepsApi.delete(releaseId, stepId);
+    },
+    onSuccess: () => {
+      // Invalidate and refetch steps
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.steps.list(releaseId, scenarioId)
+      });
+    },
+  });
+}
+
 export default {
   useUpdateStepField,
   useUpdateStepFields,
   useAddStep,
   useSyncSteps,
+  useReorderSteps,
+  useDeleteStep,
 };

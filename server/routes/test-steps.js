@@ -42,6 +42,37 @@ router.patch('/:releaseId/:id', (req, res) => {
   }
 });
 
+// DELETE /api/test-steps/:releaseId/:id - Delete a step
+router.delete('/:releaseId/:id', (req, res) => {
+  const { releaseId, id } = req.params;
+
+  try {
+    const db = getReleaseDb(releaseId);
+
+    // Get the step to find its scenario and order
+    const step = db.prepare('SELECT test_scenario_id, order_index FROM test_steps WHERE id = ?').get(id);
+    if (!step) {
+      return res.status(404).json({ success: false, error: 'Step not found' });
+    }
+
+    db.transaction(() => {
+      // Delete the step
+      db.prepare('DELETE FROM test_steps WHERE id = ?').run(id);
+
+      // Reorder remaining steps
+      db.prepare(`
+        UPDATE test_steps
+        SET order_index = order_index - 1
+        WHERE test_scenario_id = ? AND order_index > ?
+      `).run(step.test_scenario_id, step.order_index);
+    })();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/test-steps/:releaseId/sync - Full sync steps (reorders, bulk additions)
 router.post('/:releaseId/sync', (req, res) => {
   const { scenarioId, steps } = req.body;

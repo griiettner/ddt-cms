@@ -53,8 +53,64 @@ router.post('/:releaseId', (req, res) => {
   }
 });
 
-// Update, Delete, Reorder...
-// (Skipping detailed implementation for now to focus on the structure)
+// PATCH /api/test-cases/:releaseId/:id - Update test case
+router.patch('/:releaseId/:id', (req, res) => {
+  const { releaseId, id } = req.params;
+  const { name, description } = req.body;
+
+  try {
+    const db = getReleaseDb(releaseId);
+    const updates = [];
+    const params = [];
+
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      params.push(description);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' });
+    }
+
+    params.push(id);
+    db.prepare(`UPDATE test_cases SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/test-cases/:releaseId/:id - Delete test case and all scenarios/steps
+router.delete('/:releaseId/:id', (req, res) => {
+  const { releaseId, id } = req.params;
+
+  try {
+    const db = getReleaseDb(releaseId);
+    db.transaction(() => {
+      // Get all scenarios for this test case
+      const scenarios = db.prepare('SELECT id FROM test_scenarios WHERE test_case_id = ?').all(id);
+
+      // Delete steps for each scenario
+      for (const scenario of scenarios) {
+        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenario.id);
+      }
+
+      // Delete all scenarios
+      db.prepare('DELETE FROM test_scenarios WHERE test_case_id = ?').run(id);
+
+      // Delete the test case
+      db.prepare('DELETE FROM test_cases WHERE id = ?').run(id);
+    })();
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // GET /api/test-cases/scenarios/:releaseId?testCaseId=X - List scenarios for a case
 router.get('/scenarios/:releaseId', (req, res) => {
