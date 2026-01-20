@@ -1,0 +1,316 @@
+/**
+ * TestCases Store - TanStack Store
+ * Manages local UI state for the TestCases page
+ */
+import { Store } from '@tanstack/store';
+import { useStore } from '@tanstack/react-store';
+
+// Create the store
+export const testCasesStore = new Store({
+  selectedScenarioId: null,
+  openCases: new Set(),
+  modals: {
+    case: { open: false, name: '' },
+    scenario: { open: false, name: '', testCaseId: '' },
+    typeConfig: { open: false, category: '', options: '' },
+    selectConfig: {
+      open: false,
+      stepId: null,
+      configType: 'custom_select',
+      selectedId: '',
+      name: '',
+      options: '',
+    },
+    matchConfig: {
+      open: false,
+      stepId: null,
+      selectedId: '',
+      name: '',
+      options: '',
+    },
+    deleteConfirm: { open: false },
+  },
+});
+
+// Actions
+export const testCasesActions = {
+  selectScenario: (id, caseName) => {
+    testCasesStore.setState((state) => {
+      const newOpenCases = new Set(state.openCases);
+      if (caseName) {
+        newOpenCases.add(caseName);
+      }
+      return {
+        ...state,
+        selectedScenarioId: id,
+        openCases: newOpenCases,
+      };
+    });
+  },
+
+  clearScenario: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      selectedScenarioId: null,
+    }));
+  },
+
+  toggleCase: (caseName) => {
+    testCasesStore.setState((state) => {
+      const newOpenCases = new Set(state.openCases);
+      if (newOpenCases.has(caseName)) {
+        newOpenCases.delete(caseName);
+      } else {
+        newOpenCases.add(caseName);
+      }
+      return {
+        ...state,
+        openCases: newOpenCases,
+      };
+    });
+  },
+
+  // Case Modal
+  openCaseModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        case: { open: true, name: '' },
+      },
+    }));
+  },
+
+  closeCaseModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        case: { open: false, name: '' },
+      },
+    }));
+  },
+
+  setCaseModalName: (name) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        case: { ...state.modals.case, name },
+      },
+    }));
+  },
+
+  // Scenario Modal
+  openScenarioModal: (testCaseId = '') => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        scenario: { open: true, name: '', testCaseId },
+      },
+    }));
+  },
+
+  closeScenarioModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        scenario: { open: false, name: '', testCaseId: '' },
+      },
+    }));
+  },
+
+  setScenarioModalName: (name) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        scenario: { ...state.modals.scenario, name },
+      },
+    }));
+  },
+
+  setScenarioModalTestCaseId: (testCaseId) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        scenario: { ...state.modals.scenario, testCaseId },
+      },
+    }));
+  },
+
+  // Type Config Modal
+  openTypeConfigModal: (category, options) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        typeConfig: { open: true, category, options },
+      },
+    }));
+  },
+
+  closeTypeConfigModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        typeConfig: { open: false, category: '', options: '' },
+      },
+    }));
+  },
+
+  setTypeConfigOptions: (options) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        typeConfig: { ...state.modals.typeConfig, options },
+      },
+    }));
+  },
+
+  // Select Config Modal
+  openSelectConfigModal: (data) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        selectConfig: { open: true, ...data },
+      },
+    }));
+  },
+
+  closeSelectConfigModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        selectConfig: {
+          open: false,
+          stepId: null,
+          configType: 'custom_select',
+          selectedId: '',
+          name: '',
+          options: '',
+        },
+      },
+    }));
+  },
+
+  setSelectConfigField: (field, value) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        selectConfig: { ...state.modals.selectConfig, [field]: value },
+      },
+    }));
+  },
+
+  // Match Config Modal
+  openMatchConfigModal: (data) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        matchConfig: { open: true, ...data },
+      },
+    }));
+  },
+
+  closeMatchConfigModal: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        matchConfig: {
+          open: false,
+          stepId: null,
+          selectedId: '',
+          name: '',
+          options: '',
+        },
+      },
+    }));
+  },
+
+  setMatchConfigField: (field, value) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        matchConfig: { ...state.modals.matchConfig, [field]: value },
+      },
+    }));
+  },
+
+  // Delete Confirm Modal
+  openDeleteConfirm: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteConfirm: { open: true },
+      },
+    }));
+  },
+
+  closeDeleteConfirm: () => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        deleteConfirm: { open: false },
+      },
+    }));
+  },
+
+  // Reset store
+  reset: () => {
+    testCasesStore.setState({
+      selectedScenarioId: null,
+      openCases: new Set(),
+      modals: {
+        case: { open: false, name: '' },
+        scenario: { open: false, name: '', testCaseId: '' },
+        typeConfig: { open: false, category: '', options: '' },
+        selectConfig: {
+          open: false,
+          stepId: null,
+          configType: 'custom_select',
+          selectedId: '',
+          name: '',
+          options: '',
+        },
+        matchConfig: {
+          open: false,
+          stepId: null,
+          selectedId: '',
+          name: '',
+          options: '',
+        },
+        deleteConfirm: { open: false },
+      },
+    });
+  },
+};
+
+// React hook to use the store
+export function useTestCasesStore() {
+  const selectedScenarioId = useStore(testCasesStore, (state) => state.selectedScenarioId);
+  const openCases = useStore(testCasesStore, (state) => state.openCases);
+  const modals = useStore(testCasesStore, (state) => state.modals);
+
+  return {
+    selectedScenarioId,
+    openCases,
+    modals,
+    ...testCasesActions,
+  };
+}
+
+export default testCasesStore;

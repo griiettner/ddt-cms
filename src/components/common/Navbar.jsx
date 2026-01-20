@@ -1,20 +1,21 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { useAuth } from '../../context/AuthContext';
 
 function Navbar() {
   const { user } = useAuth();
-  const location = useLocation();
+  const routerState = useRouterState();
+  const pathname = routerState.location.pathname;
 
   const navLinks = [
     { path: '/', label: 'Dashboard' },
     { path: '/releases', label: 'Releases' },
-    { path: '/test-sets', label: 'Test Suites' },
+    { path: '/test-sets', label: 'Test Sets' },
     { path: '/settings', label: 'Settings' },
   ];
 
   const isActive = (path) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
+    if (path === '/') return pathname === '/';
+    return pathname.startsWith(path);
   };
 
   return (

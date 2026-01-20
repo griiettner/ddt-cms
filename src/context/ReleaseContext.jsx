@@ -13,12 +13,13 @@ export function ReleaseProvider({ children }) {
   const loadReleases = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await releasesApi.list();
-      setReleases(res.data);
+      const res = await releasesApi.list({ limit: 100 }); // Get all releases for selector
+      const releasesData = res.data || [];
+      setReleases(releasesData);
 
       // Auto-select first release if none selected
-      if (!selectedReleaseId && res.data.length > 0) {
-        const firstId = res.data[0].id.toString();
+      if (!selectedReleaseId && releasesData.length > 0) {
+        const firstId = releasesData[0].id.toString();
         setSelectedReleaseId(firstId);
         localStorage.setItem('selectedReleaseId', firstId);
       }
