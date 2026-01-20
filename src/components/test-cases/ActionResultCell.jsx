@@ -60,7 +60,9 @@ function ActionResultCell({
 
     case 'custom_select':
     case 'url': {
-      const configItem = selectConfigs.find(c => c.id === step.select_config_id);
+      // Ensure numeric comparison for config id
+      const selectConfigId = step.select_config_id ? Number(step.select_config_id) : null;
+      const configItem = selectConfigs.find(c => c.id === selectConfigId);
       const options = configItem?.options || [];
       return (
         <div className="select-container">
@@ -70,8 +72,8 @@ function ActionResultCell({
             onChange={handleSelectChange}
           >
             <option value="">-- Select --</option>
-            {options.map(o => (
-              <option key={o} value={o}>{o}</option>
+            {options.map((o, idx) => (
+              <option key={`${o}-${idx}`} value={o}>{o}</option>
             ))}
           </select>
           <button
@@ -88,7 +90,9 @@ function ActionResultCell({
     }
 
     case 'options_match': {
-      const matchConfig = matchConfigs.find(c => c.id === step.match_config_id);
+      // Ensure numeric comparison for config id
+      const matchConfigId = step.match_config_id ? Number(step.match_config_id) : null;
+      const matchConfig = matchConfigs.find(c => c.id === matchConfigId);
       const options = matchConfig?.options || [];
       return (
         <div className="select-container">

@@ -316,14 +316,14 @@ export function useTestCasesPage() {
       const { stepId, selectedId, name, options, configType } = modals.selectConfig;
       const optionsList = options.split('\n').map(l => l.trim()).filter(l => l);
 
-      const configId = await saveSelectConfigMutation.mutateAsync({
+      const config = await saveSelectConfigMutation.mutateAsync({
         selectedId: selectedId || null,
         name,
         options: optionsList,
         configType,
       });
 
-      await handleUpdateStepField(stepId, 'select_config_id', configId);
+      await handleUpdateStepField(stepId, 'select_config_id', config.id);
       closeSelectConfigModal();
     } catch (err) {
       alert(err.message);
@@ -348,13 +348,13 @@ export function useTestCasesPage() {
       const { stepId, selectedId, name, options } = modals.matchConfig;
       const optionsList = options.split('\n').map(l => l.trim()).filter(l => l);
 
-      const configId = await saveMatchConfigMutation.mutateAsync({
+      const config = await saveMatchConfigMutation.mutateAsync({
         selectedId: selectedId || null,
         name,
         options: optionsList,
       });
 
-      await handleUpdateStepField(stepId, 'match_config_id', configId);
+      await handleUpdateStepField(stepId, 'match_config_id', config.id);
       await handleUpdateStepField(stepId, 'action_result', JSON.stringify(optionsList));
       closeMatchConfigModal();
     } catch (err) {

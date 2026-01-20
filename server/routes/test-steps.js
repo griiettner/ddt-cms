@@ -84,12 +84,25 @@ router.post('/:releaseId/sync', (req, res) => {
       db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenarioId);
       const insert = db.prepare(`
         INSERT INTO test_steps (
-          test_scenario_id, order_index, step_definition, type, 
-          element_id, action, action_result, required, expected_results
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          test_scenario_id, order_index, step_definition, type,
+          element_id, action, action_result, required, expected_results,
+          select_config_id, match_config_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       steps.forEach((s, i) => {
-        insert.run(scenarioId, i, s.step_definition || '', s.type || '', s.element_id || '', s.action || '', s.action_result || '', s.required ? 1 : 0, s.expected_results || '');
+        insert.run(
+          scenarioId,
+          i,
+          s.step_definition || '',
+          s.type || '',
+          s.element_id || '',
+          s.action || '',
+          s.action_result || '',
+          s.required ? 1 : 0,
+          s.expected_results || '',
+          s.select_config_id || null,
+          s.match_config_id || null
+        );
       });
     })();
     res.json({ success: true });

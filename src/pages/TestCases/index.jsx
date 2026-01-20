@@ -192,14 +192,16 @@ function TestCases() {
             )}
           </div>
           <div className="flex gap-3">
-            <Link
-              to="/$releaseId/test-sets"
-              params={{ releaseId: releaseSlug }}
-              className="btn-outline btn-sm"
-            >
-              Back to Test Sets
-            </Link>
-            <button onClick={handleAddStep} className="btn-primary btn-sm">
+            <button className="btn-outline btn-sm flex items-center gap-1">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Run Test
+            </button>
+            <button onClick={handleAddStep} className="btn-primary btn-sm flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
               Add Step
             </button>
           </div>

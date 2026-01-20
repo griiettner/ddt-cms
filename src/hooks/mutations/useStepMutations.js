@@ -88,7 +88,7 @@ export function useUpdateStepFields(releaseId, scenarioId) {
 }
 
 /**
- * Add a new step with sync
+ * Add a new step with optimistic update
  */
 export function useAddStep(releaseId) {
   const queryClient = useQueryClient();
@@ -106,9 +106,45 @@ export function useAddStep(releaseId) {
       const freshRes = await testStepsApi.list(releaseId, { scenarioId });
       return freshRes.data;
     },
+    onMutate: async ({ scenarioId, steps }) => {
+      const queryKey = queryKeys.steps.list(releaseId, scenarioId);
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+
+      // Snapshot the previous value
+      const previousSteps = queryClient.getQueryData(queryKey);
+
+      // Optimistically update with the new steps array
+      queryClient.setQueryData(queryKey, steps);
+
+      return { previousSteps, scenarioId };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousSteps) {
+        const queryKey = queryKeys.steps.list(releaseId, context.scenarioId);
+        queryClient.setQueryData(queryKey, context.previousSteps);
+      }
+    },
     onSuccess: (newSteps, { scenarioId }) => {
       const queryKey = queryKeys.steps.list(releaseId, scenarioId);
-      queryClient.setQueryData(queryKey, newSteps);
+      // Merge new steps, preserving existing data where possible
+      queryClient.setQueryData(queryKey, (oldSteps) => {
+        if (!oldSteps) return newSteps;
+        // Map new steps, keeping existing step data for steps that haven't changed
+        return newSteps.map(newStep => {
+          const existingStep = oldSteps.find(s =>
+            s.id === newStep.id ||
+            (String(s.id).startsWith('temp') && s.order_index === newStep.order_index)
+          );
+          if (existingStep && !String(existingStep.id).startsWith('temp')) {
+            // Keep existing step data if IDs match and it's not a temp step
+            return { ...existingStep, ...newStep };
+          }
+          return newStep;
+        });
+      });
     },
   });
 }
@@ -169,12 +205,7 @@ export function useReorderSteps(releaseId, scenarioId) {
         queryClient.setQueryData(queryKey, context.previousSteps);
       }
     },
-    onSuccess: () => {
-      // Invalidate to get fresh data with correct IDs
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.steps.list(releaseId, scenarioId)
-      });
-    },
+    // No onSuccess invalidation needed - optimistic update is sufficient
   });
 }
 
