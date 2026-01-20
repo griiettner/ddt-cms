@@ -3,30 +3,45 @@ import { getRegistryDb } from '../db/database.js';
 
 const router = express.Router();
 
-// GET /api/test-runs - List recent test runs (optionally filter by releaseId)
+// GET /api/test-runs - List test runs with pagination (optionally filter by releaseId)
 router.get('/', (req, res) => {
-  const { releaseId, limit = 10 } = req.query;
+  const { releaseId, page = 1, pageSize = 10 } = req.query;
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limit = Math.min(100, Math.max(1, parseInt(pageSize, 10)));
+  const offset = (pageNum - 1) * limit;
 
   try {
     const db = getRegistryDb();
-    let query = `
+
+    // Build WHERE clause
+    let whereClause = '';
+    const countParams = [];
+    const queryParams = [];
+
+    if (releaseId) {
+      whereClause = ' WHERE tr.release_id = ?';
+      countParams.push(releaseId);
+      queryParams.push(releaseId);
+    }
+
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM test_runs tr${whereClause}`;
+    const { total } = db.prepare(countQuery).get(...countParams);
+
+    // Get paginated data
+    const dataQuery = `
       SELECT
         tr.*,
         r.release_number
       FROM test_runs tr
       LEFT JOIN releases r ON tr.release_id = r.id
+      ${whereClause}
+      ORDER BY tr.executed_at DESC
+      LIMIT ? OFFSET ?
     `;
-    const params = [];
+    queryParams.push(limit, offset);
 
-    if (releaseId) {
-      query += ' WHERE tr.release_id = ?';
-      params.push(releaseId);
-    }
-
-    query += ' ORDER BY tr.executed_at DESC LIMIT ?';
-    params.push(parseInt(limit, 10));
-
-    const runs = db.prepare(query).all(...params);
+    const runs = db.prepare(dataQuery).all(...queryParams);
 
     // Parse failed_details JSON
     const parsedRuns = runs.map(run => ({
@@ -34,7 +49,16 @@ router.get('/', (req, res) => {
       failed_details: run.failed_details ? JSON.parse(run.failed_details) : [],
     }));
 
-    res.json({ success: true, data: parsedRuns });
+    res.json({
+      success: true,
+      data: parsedRuns,
+      pagination: {
+        page: pageNum,
+        pageSize: limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -14,10 +14,11 @@ function Navbar() {
   const isActive = (key) => {
     if (key === 'dashboard') {
       // Dashboard is active if we're at /:releaseId (no sub-path)
-      return hasRelease && !pathname.includes('/test-sets') && !pathname.includes('/test-cases') && !pathname.includes('/settings') && pathname !== '/releases';
+      return hasRelease && !pathname.includes('/test-sets') && !pathname.includes('/test-cases') && !pathname.includes('/test-runs') && !pathname.includes('/settings') && pathname !== '/releases';
     }
     if (key === 'releases') return pathname === '/releases';
     if (key === 'test-sets') return pathname.includes('/test-sets');
+    if (key === 'test-runs') return pathname.includes('/test-runs');
     if (key === 'settings') return pathname.includes('/settings');
     return false;
   };
@@ -76,6 +77,25 @@ function Navbar() {
           ) : (
             <span className="px-4 py-2 rounded font-medium text-sm text-white/50 cursor-not-allowed">
               Test Sets
+            </span>
+          )}
+
+          {/* Test Runs */}
+          {hasRelease ? (
+            <Link
+              to="/$releaseId/test-runs"
+              params={{ releaseId }}
+              className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+                isActive('test-runs')
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Test Runs
+            </Link>
+          ) : (
+            <span className="px-4 py-2 rounded font-medium text-sm text-white/50 cursor-not-allowed">
+              Test Runs
             </span>
           )}
 

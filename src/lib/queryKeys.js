@@ -88,6 +88,13 @@ export const queryKeys = {
   export: {
     all: (releaseId) => ['export', releaseId],
   },
+
+  // Test Runs queries
+  testRuns: {
+    all: ['testRuns'],
+    list: (releaseId) => ['testRuns', releaseId, 'list'],
+    detail: (id) => ['testRuns', 'detail', id],
+  },
 };
 
 export default queryKeys;

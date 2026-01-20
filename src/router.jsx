@@ -7,6 +7,7 @@
  * - /:releaseId - Dashboard for a specific release
  * - /:releaseId/test-sets - Test Sets for a release
  * - /:releaseId/test-cases - Test Cases for a release
+ * - /:releaseId/test-runs - Test Run history for a release
  * - /:releaseId/settings - Settings for a release
  */
 import {
@@ -24,6 +25,7 @@ import Dashboard from './pages/Dashboard/index';
 import Releases from './pages/Releases/index';
 import TestSets from './pages/TestSets/index';
 import TestCases from './pages/TestCases/index';
+import TestRuns from './pages/TestRuns/index';
 import Settings from './pages/Settings/index';
 import NotFound from './pages/NotFound';
 
@@ -90,6 +92,13 @@ const testCasesRoute = createRoute({
   }),
 });
 
+// Test Runs route under release
+const testRunsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/$releaseId/test-runs',
+  component: TestRuns,
+});
+
 // Settings route under release
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -120,6 +129,7 @@ const routeTree = rootRoute.addChildren([
   releaseRoute,
   testSetsRoute,
   testCasesRoute,
+  testRunsRoute,
   settingsRoute,
   notFoundRoute,
   catchAllRoute,
