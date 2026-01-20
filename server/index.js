@@ -11,7 +11,14 @@ dotenv.config();
 import { initRegistrySchema } from './db/migrations.js';
 
 // Initialize Registry Database
-initRegistrySchema();
+try {
+  initRegistrySchema();
+  console.log('Registry database initialized successfully');
+} catch (err) {
+  console.error('Failed to initialize registry database:', err.message);
+  console.error('Stack:', err.stack);
+  // Don't exit - let the server start and show errors per-request
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
