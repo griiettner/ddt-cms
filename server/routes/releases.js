@@ -85,15 +85,18 @@ router.get('/', (req, res) => {
 // POST /api/releases - Create new release
 router.post('/', async (req, res) => {
     const { release_number, description, notes } = req.body;
-    const user = req.user.eid;
+    const user = req.user?.eid || 'anonymous';
+
+    console.log('[POST /api/releases] Body:', req.body);
+    console.log('[POST /api/releases] User:', user);
 
     if (!release_number) {
         return res.status(400).json({ success: false, error: 'Release number is required' });
     }
 
-    const registry = getRegistryDb();
-    
+    let registry;
     try {
+        registry = getRegistryDb();
         const existing = registry.prepare('SELECT id FROM releases WHERE release_number = ?').get(release_number);
         if (existing) {
             return res.status(400).json({ success: false, error: 'Release number already exists' });
@@ -125,6 +128,8 @@ router.post('/', async (req, res) => {
 
         res.json({ success: true, data: { id: newReleaseId, release_number } });
     } catch (err) {
+        console.error('[POST /api/releases] Error:', err.message);
+        console.error('[POST /api/releases] Stack:', err.stack);
         res.status(500).json({ success: false, error: err.message });
     }
 });
