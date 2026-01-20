@@ -14,7 +14,7 @@ import { useRelease } from '../../../context/ReleaseContext';
 
 export function useTestSetsPage() {
   const navigate = useNavigate();
-  const { selectedReleaseId } = useRelease();
+  const { selectedReleaseId, releaseSlug } = useRelease();
 
   // Local UI state
   const [pagination, setPagination] = useState({ page: 1, limit: 10 });
@@ -54,7 +54,11 @@ export function useTestSetsPage() {
 
   // Navigation
   function navigateToTestCases(testSetId) {
-    navigate({ to: '/test-cases', search: { testSetId } });
+    navigate({
+      to: '/$releaseId/test-cases',
+      params: { releaseId: releaseSlug },
+      search: { testSetId },
+    });
   }
 
   // Modal handlers

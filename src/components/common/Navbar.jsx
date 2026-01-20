@@ -1,21 +1,25 @@
-import { Link, useRouterState } from '@tanstack/react-router';
+import { Link, useRouterState, useParams } from '@tanstack/react-router';
 import { useAuth } from '../../context/AuthContext';
 
 function Navbar() {
   const { user } = useAuth();
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
+  const params = useParams({ strict: false });
+  const releaseId = params.releaseId || localStorage.getItem('selectedReleaseSlug') || '';
 
-  const navLinks = [
-    { path: '/', label: 'Dashboard' },
-    { path: '/releases', label: 'Releases' },
-    { path: '/test-sets', label: 'Test Sets' },
-    { path: '/settings', label: 'Settings' },
-  ];
+  // Check if we're on a release-specific page
+  const hasRelease = !!releaseId;
 
-  const isActive = (path) => {
-    if (path === '/') return pathname === '/';
-    return pathname.startsWith(path);
+  const isActive = (key) => {
+    if (key === 'dashboard') {
+      // Dashboard is active if we're at /:releaseId (no sub-path)
+      return hasRelease && !pathname.includes('/test-sets') && !pathname.includes('/test-cases') && !pathname.includes('/settings') && pathname !== '/releases';
+    }
+    if (key === 'releases') return pathname === '/releases';
+    if (key === 'test-sets') return pathname.includes('/test-sets');
+    if (key === 'settings') return pathname.includes('/settings');
+    return false;
   };
 
   return (
@@ -25,19 +29,74 @@ function Navbar() {
           Test Builder
         </Link>
         <div className="flex items-center gap-1">
-          {navLinks.map((link) => (
+          {/* Dashboard */}
+          {hasRelease ? (
             <Link
-              key={link.path}
-              to={link.path}
+              to="/$releaseId"
+              params={{ releaseId }}
               className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
-                isActive(link.path)
+                isActive('dashboard')
                   ? 'bg-white/20 text-white'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
-              {link.label}
+              Dashboard
             </Link>
-          ))}
+          ) : (
+            <span className="px-4 py-2 rounded font-medium text-sm text-white/50 cursor-not-allowed">
+              Dashboard
+            </span>
+          )}
+
+          {/* Releases */}
+          <Link
+            to="/releases"
+            className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+              isActive('releases')
+                ? 'bg-white/20 text-white'
+                : 'text-white/80 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            Releases
+          </Link>
+
+          {/* Test Sets */}
+          {hasRelease ? (
+            <Link
+              to="/$releaseId/test-sets"
+              params={{ releaseId }}
+              className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+                isActive('test-sets')
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Test Sets
+            </Link>
+          ) : (
+            <span className="px-4 py-2 rounded font-medium text-sm text-white/50 cursor-not-allowed">
+              Test Sets
+            </span>
+          )}
+
+          {/* Settings */}
+          {hasRelease ? (
+            <Link
+              to="/$releaseId/settings"
+              params={{ releaseId }}
+              className={`px-4 py-2 rounded font-medium text-sm transition-colors ${
+                isActive('settings')
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Settings
+            </Link>
+          ) : (
+            <span className="px-4 py-2 rounded font-medium text-sm text-white/50 cursor-not-allowed">
+              Settings
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-4">

@@ -10,11 +10,11 @@ function StatsCards({ stats }) {
     <div className="grid grid-cols-6 gap-4 mb-8">
       <div className="card">
         <p className="text-sm font-semibold text-co-gray-600 uppercase tracking-wide">Sets</p>
-        <p className="text-4xl font-bold text-co-blue mt-2">{stats?.totalSets ?? 0}</p>
+        <p className="text-4xl font-bold text-co-blue mt-2">{stats?.totalTestSets ?? 0}</p>
       </div>
       <div className="card">
         <p className="text-sm font-semibold text-co-gray-600 uppercase tracking-wide">Cases</p>
-        <p className="text-4xl font-bold text-co-blue mt-2">{stats?.totalCases ?? 0}</p>
+        <p className="text-4xl font-bold text-co-blue mt-2">{stats?.totalTestCases ?? 0}</p>
       </div>
       <div className="card">
         <p className="text-sm font-semibold text-co-gray-600 uppercase tracking-wide">Scenarios</p>

@@ -26,8 +26,8 @@ export const getDashboardStats = (releaseId) => {
 
   // Release specific stats
   const db = getReleaseDb(releaseId);
-  const totalSets = db.prepare('SELECT COUNT(*) as count FROM test_sets').get().count;
-  const totalCases = db.prepare('SELECT COUNT(*) as count FROM test_cases').get().count;
+  const totalTestSets = db.prepare('SELECT COUNT(*) as count FROM test_sets').get().count;
+  const totalTestCases = db.prepare('SELECT COUNT(*) as count FROM test_cases').get().count;
   const totalScenarios = db.prepare('SELECT COUNT(*) as count FROM test_scenarios').get().count;
   const totalSteps = db.prepare('SELECT COUNT(*) as count FROM test_steps').get().count;
 
@@ -40,8 +40,8 @@ export const getDashboardStats = (releaseId) => {
   const lastRunFailed = lastRun?.failed_tests || 0;
 
   return {
-    totalSets,
-    totalCases,
+    totalTestSets,
+    totalTestCases,
     totalScenarios,
     totalSteps,
     lastRunPassed,

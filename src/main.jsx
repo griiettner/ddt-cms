@@ -6,8 +6,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { router } from './router';
 import { queryClient } from './lib/queryClient';
 import { initializeAuth } from './stores/authStore';
-// Keep contexts for now during migration - will be removed in Phase 5
-import { ReleaseProvider } from './context/ReleaseContext';
 import { AuthProvider } from './context/AuthContext';
 import './styles/index.css';
 
@@ -18,9 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ReleaseProvider>
-          <RouterProvider router={router} />
-        </ReleaseProvider>
+        <RouterProvider router={router} />
       </AuthProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

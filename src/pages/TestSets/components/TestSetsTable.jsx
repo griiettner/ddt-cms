@@ -1,8 +1,9 @@
 /**
  * TestSets Table Component
  */
-import { Link } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import { KebabMenu, Pagination } from '../../../components/common';
+import { useRelease } from '../../../context/ReleaseContext';
 
 function TestSetsTable({
   testSets,
@@ -12,6 +13,11 @@ function TestSetsTable({
   onDeleteClick,
   onNavigate,
 }) {
+  const { releaseId } = useParams({ strict: false });
+  const { releaseSlug } = useRelease();
+  // Use slug from context if available, fallback to URL param
+  const slug = releaseSlug || releaseId;
+
   return (
     <div className="card">
       <div className="overflow-x-auto">
@@ -38,7 +44,8 @@ function TestSetsTable({
                 <tr key={ts.id}>
                   <td className="font-bold">
                     <Link
-                      to="/test-cases"
+                      to="/$releaseId/test-cases"
+                      params={{ releaseId: slug }}
                       search={{ testSetId: ts.id }}
                       className="text-co-blue hover:underline"
                     >

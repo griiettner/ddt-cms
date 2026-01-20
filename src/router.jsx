@@ -1,6 +1,13 @@
 /**
  * TanStack Router Configuration
  * Code-based routing for the application
+ *
+ * URL Structure:
+ * - /releases - Releases management page
+ * - /:releaseId - Dashboard for a specific release
+ * - /:releaseId/test-sets - Test Sets for a release
+ * - /:releaseId/test-cases - Test Cases for a release
+ * - /:releaseId/settings - Settings for a release
  */
 import {
   createRouter,
@@ -10,6 +17,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import Navbar from './components/common/Navbar';
+import { ReleaseProvider } from './context/ReleaseContext';
 
 // Import page components (folder-based structure)
 import Dashboard from './pages/Dashboard/index';
@@ -22,10 +30,12 @@ import NotFound from './pages/NotFound';
 // Root layout component
 function RootLayout() {
   return (
-    <div className="min-h-screen bg-white text-co-gray-900">
-      <Navbar />
-      <Outlet />
-    </div>
+    <ReleaseProvider>
+      <div className="min-h-screen bg-white text-co-gray-900">
+        <Navbar />
+        <Outlet />
+      </div>
+    </ReleaseProvider>
   );
 }
 
@@ -34,41 +44,56 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Dashboard route (index)
+// Index route - redirects to releases or last selected release
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: Dashboard,
+  beforeLoad: () => {
+    // Check localStorage for last selected release slug
+    const lastReleaseSlug = localStorage.getItem('selectedReleaseSlug');
+    if (lastReleaseSlug) {
+      throw redirect({ to: '/$releaseId', params: { releaseId: lastReleaseSlug } });
+    }
+    // No release selected, go to releases page
+    throw redirect({ to: '/releases' });
+  },
 });
 
-// Releases route
+// Releases route (no releaseId in URL)
 const releasesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/releases',
   component: Releases,
 });
 
-// Test Sets route
+// Release-specific routes with releaseId param
+const releaseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/$releaseId',
+  component: Dashboard,
+});
+
+// Test Sets route under release
 const testSetsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/test-sets',
+  path: '/$releaseId/test-sets',
   component: TestSets,
 });
 
 // Test Cases route with search params for testSetId
 const testCasesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/test-cases',
+  path: '/$releaseId/test-cases',
   component: TestCases,
   validateSearch: (search) => ({
     testSetId: search.testSetId || undefined,
   }),
 });
 
-// Settings route
+// Settings route under release
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/settings',
+  path: '/$releaseId/settings',
   component: Settings,
 });
 
@@ -92,6 +117,7 @@ const catchAllRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   releasesRoute,
+  releaseRoute,
   testSetsRoute,
   testCasesRoute,
   settingsRoute,

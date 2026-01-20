@@ -55,10 +55,10 @@
 
   /* Floating menu */
   .floating-menu {
-    @apply absolute z-50 bg-white rounded-lg shadow-lg border border-co-gray-100 py-2 min-w-[160px];
+    @apply absolute z-50 bg-white rounded-lg shadow-lg border border-co-gray-100 py-2 w-[160px];
   }
   .floating-menu button {
-    @apply w-full px-4 py-2 text-left text-sm hover:bg-co-gray-50 transition-colors;
+    @apply w-full px-4 py-2 text-left text-xs hover:bg-co-gray-50 transition-colors;
   }
 
   /* Notes editor */

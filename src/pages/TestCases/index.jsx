@@ -2,7 +2,7 @@
  * TestCases Page
  * Smart hooks + dumb components architecture
  */
-import { Link } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import {
   StepRow,
   ScenarioSidebar,
@@ -16,6 +16,7 @@ import { ConfirmModal, LoadingSpinner } from '../../components/common';
 import { useTestCasesPage } from './hooks/useTestCasesPage';
 
 function TestCases() {
+  const { releaseId: releaseSlug } = useParams({ strict: false });
   const {
     // Route params
     testSetId,
@@ -90,9 +91,19 @@ function TestCases() {
     return (
       <div className="p-8 text-center">
         <p className="text-co-gray-500">Missing Release ID or Test Set ID</p>
-        <Link to="/test-sets" className="btn-primary mt-4 inline-block">
-          Go to Test Sets
-        </Link>
+        {releaseSlug ? (
+          <Link
+            to="/$releaseId/test-sets"
+            params={{ releaseId: releaseSlug }}
+            className="btn-primary mt-4 inline-block"
+          >
+            Go to Test Sets
+          </Link>
+        ) : (
+          <Link to="/releases" className="btn-primary mt-4 inline-block">
+            Go to Releases
+          </Link>
+        )}
       </div>
     );
   }
@@ -134,7 +145,11 @@ function TestCases() {
             )}
           </div>
           <div className="flex gap-3">
-            <Link to="/test-sets" className="btn-outline btn-sm">
+            <Link
+              to="/$releaseId/test-sets"
+              params={{ releaseId: releaseSlug }}
+              className="btn-outline btn-sm"
+            >
               Back to Test Sets
             </Link>
             <button onClick={handleAddStep} className="btn-primary btn-sm">

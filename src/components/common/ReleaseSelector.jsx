@@ -1,7 +1,14 @@
+import { useRouterState } from '@tanstack/react-router';
 import { useRelease } from '../../context/ReleaseContext';
 
 function ReleaseSelector({ className = '' }) {
   const { releases, selectedReleaseId, selectRelease, loading } = useRelease();
+  const routerState = useRouterState();
+  const pathname = routerState.location.pathname;
+
+  const handleChange = (e) => {
+    selectRelease(e.target.value, pathname);
+  };
 
   if (loading) {
     return (
@@ -23,11 +30,11 @@ function ReleaseSelector({ className = '' }) {
     <select
       className={`form-input ${className}`}
       value={selectedReleaseId}
-      onChange={(e) => selectRelease(e.target.value)}
+      onChange={handleChange}
     >
       {releases.map((release) => (
         <option key={release.id} value={release.id}>
-          Release {release.release_number}
+          {release.release_number}
         </option>
       ))}
     </select>
