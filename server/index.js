@@ -52,6 +52,12 @@ if (isProduction) {
   app.use(express.static(path.join(__dirname, '../dist')));
 }
 
+// Request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 // Basic Identification Middleware mock (per documentation)
 app.use((req, res, next) => {
   req.user = {
@@ -93,13 +99,17 @@ if (isProduction) {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('=== ERROR CAUGHT ===');
+  console.error('Path:', req.method, req.path);
+  console.error('Error:', err.message);
+  console.error('Stack:', err.stack);
+  console.error('====================');
   res.status(500).json({
     success: false,
     error: {
       code: 'SERVER_ERROR',
       message: 'An internal server error occurred',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      details: err.message // Always show for debugging
     }
   });
 });
