@@ -74,9 +74,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files - in production serve from dist, in dev Vite handles it
+// Serve static files - serve from dist in production OR when SERVE_STATIC=true (for corporate env)
 const isProduction = process.env.NODE_ENV === 'production';
-if (isProduction) {
+const serveStatic = isProduction || process.env.SERVE_STATIC === 'true';
+if (serveStatic) {
+  console.log('Serving static files from dist/ (same-origin mode)');
   app.use(express.static(path.join(__dirname, '../dist')));
 }
 
@@ -112,8 +114,8 @@ app.use('/api/match-configs', matchConfigRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/test-runs', testRunRoutes);
 
-// SPA fallback - serve index.html for non-API routes in production
-if (isProduction) {
+// SPA fallback - serve index.html for non-API routes when serving static files
+if (serveStatic) {
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
