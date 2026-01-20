@@ -37,13 +37,32 @@ export const getRegistryDb = () => {
  * @param {Database} db - The database connection
  */
 const migrateReleaseDb = (db) => {
-  // Check if category_id column exists in test_sets
-  const tableInfo = db.prepare("PRAGMA table_info(test_sets)").all();
-  const hasCategoryId = tableInfo.some(col => col.name === 'category_id');
+  try {
+    // Migration: Add category_id to test_sets
+    const testSetsInfo = db.prepare("PRAGMA table_info(test_sets)").all();
+    const testSetsColumns = testSetsInfo.map(col => col.name);
 
-  if (!hasCategoryId) {
-    db.exec('ALTER TABLE test_sets ADD COLUMN category_id INTEGER');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_test_sets_category ON test_sets(category_id)');
+    if (!testSetsColumns.includes('category_id')) {
+      db.exec('ALTER TABLE test_sets ADD COLUMN category_id INTEGER');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_test_sets_category ON test_sets(category_id)');
+      console.log('  -> Added category_id to test_sets');
+    }
+
+    // Migration: Add select_config_id and match_config_id to test_steps
+    const testStepsInfo = db.prepare("PRAGMA table_info(test_steps)").all();
+    const testStepsColumns = testStepsInfo.map(col => col.name);
+
+    if (!testStepsColumns.includes('select_config_id')) {
+      db.exec('ALTER TABLE test_steps ADD COLUMN select_config_id INTEGER');
+      console.log('  -> Added select_config_id to test_steps');
+    }
+
+    if (!testStepsColumns.includes('match_config_id')) {
+      db.exec('ALTER TABLE test_steps ADD COLUMN match_config_id INTEGER');
+      console.log('  -> Added match_config_id to test_steps');
+    }
+  } catch (err) {
+    console.error('Migration warning (non-fatal):', err.message);
   }
 };
 
