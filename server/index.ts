@@ -1,5 +1,3 @@
-console.log('=== SERVER STARTING ===');
-
 import express from 'express';
 import type { Express, Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import cors from 'cors';
@@ -19,17 +17,14 @@ declare module 'express-serve-static-core' {
 // Load environment variables
 dotenv.config();
 
-console.log('=== IMPORTS LOADED ===');
+import { initSchema } from './db/migrations.js';
 
-import { initRegistrySchema } from './db/migrations.js';
-
-// Initialize Registry Database
+// Initialize Unified Database
 try {
-  initRegistrySchema();
-  console.log('Registry database initialized successfully');
+  initSchema();
 } catch (err) {
   const error = err as Error;
-  console.error('Failed to initialize registry database:', error.message);
+  console.error('Failed to initialize database:', error.message);
   console.error('Stack:', error.stack);
   // Don't exit - let the server start and show errors per-request
 }
@@ -40,32 +35,18 @@ const __dirname = path.dirname(__filename);
 const app: Express = express();
 const PORT: string | number = process.env.PORT || 3000;
 
-console.log('=== LOADING ROUTES ===');
 import releaseRoutes from './routes/releases.js';
-console.log('  - releases loaded');
 import dashboardRoutes from './routes/dashboard.js';
-console.log('  - dashboard loaded');
 import testSetRoutes from './routes/test-sets.js';
-console.log('  - test-sets loaded');
 import testCaseRoutes from './routes/test-cases.js';
-console.log('  - test-cases loaded');
 import testStepRoutes from './routes/test-steps.js';
-console.log('  - test-steps loaded');
 import configRoutes from './routes/config.js';
-console.log('  - config loaded');
 import exportRoutes from './routes/export.js';
-console.log('  - export loaded');
 import selectConfigRoutes from './routes/select-configs.js';
-console.log('  - select-configs loaded');
 import matchConfigRoutes from './routes/match-configs.js';
-console.log('  - match-configs loaded');
 import categoryRoutes from './routes/categories.js';
-console.log('  - categories loaded');
 import testRunRoutes from './routes/test-runs.js';
-console.log('  - test-runs loaded');
 import reusableCasesRoutes from './routes/reusable-cases.js';
-console.log('  - reusable-cases loaded');
-console.log('=== ALL ROUTES LOADED ===');
 
 // Middleware
 app.use(
@@ -90,7 +71,6 @@ app.options('*', cors());
 
 // Request logging - BEFORE body parsing to catch all requests
 app.use((req: Request, res: Response, next: NextFunction): void => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   if (req.method === 'OPTIONS') {
     console.log('  -> CORS Preflight request');
   }
@@ -111,7 +91,6 @@ app.use((req: Request, res: Response, next: NextFunction): void => {
 const isProduction: boolean = process.env.NODE_ENV === 'production';
 const serveStatic: boolean = isProduction || process.env.SERVE_STATIC === 'true';
 if (serveStatic) {
-  console.log('Serving static files from dist/ (same-origin mode)');
   app.use(express.static(path.join(__dirname, '../dist')));
 }
 

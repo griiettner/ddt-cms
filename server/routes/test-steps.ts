@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getReleaseDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type { TestStepRow } from '../types/index.js';
 
 const router: Router = express.Router();
@@ -51,10 +51,12 @@ router.get(
     }
 
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const steps = db
-        .prepare('SELECT * FROM test_steps WHERE test_scenario_id = ? ORDER BY order_index ASC')
-        .all(scenarioId) as TestStepRow[];
+        .prepare(
+          'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC'
+        )
+        .all(scenarioId, req.params.releaseId) as TestStepRow[];
       res.json({ success: true, data: steps });
     } catch (err) {
       const error = err as Error;
@@ -71,7 +73,7 @@ router.patch(
     const updates = req.body;
 
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
         .join(', ');
@@ -81,8 +83,8 @@ router.patch(
         return val as string | number | null;
       });
 
-      const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ?`);
-      stmt.run(...values, id);
+      const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ? AND release_id = ?`);
+      stmt.run(...values, id, releaseId);
 
       res.json({ success: true });
     } catch (err) {
@@ -97,7 +99,7 @@ router.delete('/:releaseId/:id', (req: Request<StepIdParams>, res: Response): vo
   const { releaseId, id } = req.params;
 
   try {
-    const db = getReleaseDb(releaseId);
+    const db = getDb();
 
     // Get the step to find its scenario and order
     interface StepInfo {
@@ -105,8 +107,10 @@ router.delete('/:releaseId/:id', (req: Request<StepIdParams>, res: Response): vo
       order_index: number;
     }
     const step = db
-      .prepare('SELECT test_scenario_id, order_index FROM test_steps WHERE id = ?')
-      .get(id) as StepInfo | undefined;
+      .prepare(
+        'SELECT test_scenario_id, order_index FROM test_steps WHERE id = ? AND release_id = ?'
+      )
+      .get(id, releaseId) as StepInfo | undefined;
     if (!step) {
       res.status(404).json({ success: false, error: 'Step not found' });
       return;
@@ -114,16 +118,16 @@ router.delete('/:releaseId/:id', (req: Request<StepIdParams>, res: Response): vo
 
     db.transaction(() => {
       // Delete the step
-      db.prepare('DELETE FROM test_steps WHERE id = ?').run(id);
+      db.prepare('DELETE FROM test_steps WHERE id = ? AND release_id = ?').run(id, releaseId);
 
       // Reorder remaining steps
       db.prepare(
         `
         UPDATE test_steps
         SET order_index = order_index - 1
-        WHERE test_scenario_id = ? AND order_index > ?
+        WHERE test_scenario_id = ? AND order_index > ? AND release_id = ?
       `
-      ).run(step.test_scenario_id, step.order_index);
+      ).run(step.test_scenario_id, step.order_index, releaseId);
     })();
 
     res.json({ success: true });
@@ -138,24 +142,30 @@ router.post(
   '/:releaseId/sync',
   (req: Request<ReleaseIdParams, unknown, SyncStepsBody>, res: Response): void => {
     const { scenarioId, steps } = req.body;
+    const releaseId = req.params.releaseId;
+
     if (!scenarioId || !Array.isArray(steps)) {
       res.status(400).json({ success: false, error: 'Invalid data' });
       return;
     }
 
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       db.transaction(() => {
-        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenarioId);
+        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ? AND release_id = ?').run(
+          scenarioId,
+          releaseId
+        );
         const insert = db.prepare(`
         INSERT INTO test_steps (
-          test_scenario_id, order_index, step_definition, type,
+          release_id, test_scenario_id, order_index, step_definition, type,
           element_id, action, action_result, required, expected_results,
           select_config_id, match_config_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
         steps.forEach((s: StepData, i: number) => {
           insert.run(
+            releaseId,
             scenarioId,
             i,
             s.step_definition || '',

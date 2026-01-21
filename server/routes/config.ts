@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getReleaseDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type { ConfigOptionRow, MaxOrderResult, ApiResponse } from '../types/index.js';
 
 const router: Router = express.Router();
@@ -35,12 +35,19 @@ router.get(
   '/:releaseId/types',
   (req: Request<ReleaseIdParams>, res: Response<ApiResponse<ConfigOptionRow[]>>): void => {
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
+      const releaseId = req.params.releaseId;
+      // Get release-specific config, falling back to global (NULL release_id) config
       const types = db
         .prepare(
-          "SELECT * FROM configuration_options WHERE category = 'type' AND is_active = 1 ORDER BY order_index ASC"
+          `SELECT * FROM configuration_options
+           WHERE category = 'type' AND is_active = 1
+           AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
+             SELECT key FROM configuration_options WHERE category = 'type' AND release_id = ?
+           )))
+           ORDER BY order_index ASC`
         )
-        .all() as ConfigOptionRow[];
+        .all(releaseId, releaseId) as ConfigOptionRow[];
       res.json({ success: true, data: types });
     } catch (err) {
       const error = err as Error;
@@ -54,12 +61,19 @@ router.get(
   '/:releaseId/actions',
   (req: Request<ReleaseIdParams>, res: Response<ApiResponse<ConfigOptionRow[]>>): void => {
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
+      const releaseId = req.params.releaseId;
+      // Get release-specific config, falling back to global (NULL release_id) config
       const actions = db
         .prepare(
-          "SELECT * FROM configuration_options WHERE category = 'action' AND is_active = 1 ORDER BY order_index ASC"
+          `SELECT * FROM configuration_options
+           WHERE category = 'action' AND is_active = 1
+           AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
+             SELECT key FROM configuration_options WHERE category = 'action' AND release_id = ?
+           )))
+           ORDER BY order_index ASC`
         )
-        .all() as ConfigOptionRow[];
+        .all(releaseId, releaseId) as ConfigOptionRow[];
       res.json({ success: true, data: actions });
     } catch (err) {
       const error = err as Error;
@@ -84,22 +98,30 @@ router.post(
     }
 
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
 
-      // Get max order index
+      // Get max order index for this release's options
       const maxOrder = db
         .prepare(
-          'SELECT MAX(order_index) as max_order FROM configuration_options WHERE category = ?'
+          'SELECT MAX(order_index) as max_order FROM configuration_options WHERE category = ? AND release_id = ?'
         )
-        .get(category) as MaxOrderResult;
+        .get(category, releaseId) as MaxOrderResult;
       const orderIndex = (maxOrder.max_order || 0) + 1;
 
       const stmt = db.prepare(`
-        INSERT INTO configuration_options (category, key, display_name, result_type, default_value, order_index)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO configuration_options (release_id, category, key, display_name, result_type, default_value, order_index)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(category, key, display_name, result_type || null, default_value || null, orderIndex);
+      stmt.run(
+        releaseId,
+        category,
+        key,
+        display_name,
+        result_type || null,
+        default_value || null,
+        orderIndex
+      );
 
       res.json({ success: true, data: undefined });
     } catch (err) {
@@ -120,20 +142,23 @@ router.post(
     const { options } = req.body;
 
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
 
       db.transaction(() => {
-        // Remove existing active options for this category
-        db.prepare('DELETE FROM configuration_options WHERE category = ?').run(category);
+        // Remove existing options for this release and category
+        db.prepare('DELETE FROM configuration_options WHERE category = ? AND release_id = ?').run(
+          category,
+          releaseId
+        );
 
         // Insert new ones
         const stmt = db.prepare(`
-          INSERT INTO configuration_options (category, key, display_name, order_index)
-          VALUES (?, ?, ?, ?)
+          INSERT INTO configuration_options (release_id, category, key, display_name, order_index)
+          VALUES (?, ?, ?, ?, ?)
         `);
 
         options.forEach((opt, i) => {
-          stmt.run(category, opt.display_name, opt.display_name, i);
+          stmt.run(releaseId, category, opt.display_name, opt.display_name, i);
         });
       })();
 
@@ -150,7 +175,7 @@ router.delete(
   '/:releaseId/:id',
   (req: Request<DeleteParams>, res: Response<ApiResponse<undefined>>): void => {
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       db.prepare('DELETE FROM configuration_options WHERE id = ?').run(req.params.id);
       res.json({ success: true, data: undefined });
     } catch (err) {

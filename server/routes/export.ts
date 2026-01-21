@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getReleaseDb, getRegistryDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type {
   DatabaseInstance,
   ReleaseRow,
@@ -81,20 +81,22 @@ router.get(
     res: Response<ApiSuccessResponse<ExportData> | ApiErrorResponse>
   ): void => {
     try {
-      const db: DatabaseInstance = getReleaseDb(req.params.releaseId);
-      const registry: DatabaseInstance = getRegistryDb();
+      const db: DatabaseInstance = getDb();
+      const releaseId = req.params.releaseId;
 
       // Get release info
-      const release = registry
-        .prepare('SELECT * FROM releases WHERE id = ?')
-        .get(req.params.releaseId) as ReleaseRow | undefined;
+      const release = db.prepare('SELECT * FROM releases WHERE id = ?').get(releaseId) as
+        | ReleaseRow
+        | undefined;
       if (!release) {
         res.status(404).json({ success: false, error: 'Release not found' });
         return;
       }
 
-      // Get test sets
-      const testSets = db.prepare('SELECT * FROM test_sets').all() as TestSetRow[];
+      // Get test sets for this release
+      const testSets = db
+        .prepare('SELECT * FROM test_sets WHERE release_id = ?')
+        .all(releaseId) as TestSetRow[];
 
       // Build nested structure
       const exportData: ExportData = {
@@ -102,8 +104,10 @@ router.get(
         generated_at: new Date().toISOString(),
         test_sets: testSets.map((ts: TestSetRow): ExportedTestSet => {
           const cases = db
-            .prepare('SELECT * FROM test_cases WHERE test_set_id = ? ORDER BY order_index ASC')
-            .all(ts.id) as TestCaseRow[];
+            .prepare(
+              'SELECT * FROM test_cases WHERE test_set_id = ? AND release_id = ? ORDER BY order_index ASC'
+            )
+            .all(ts.id, releaseId) as TestCaseRow[];
 
           return {
             id: ts.id,
@@ -112,9 +116,9 @@ router.get(
               // Get scenarios (custom logic: usually 1, but we'll map all)
               const scenarios = db
                 .prepare(
-                  'SELECT * FROM test_scenarios WHERE test_case_id = ? ORDER BY order_index ASC'
+                  'SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC'
                 )
-                .all(tc.id) as TestScenarioRow[];
+                .all(tc.id, releaseId) as TestScenarioRow[];
 
               return {
                 id: tc.id,
@@ -122,9 +126,9 @@ router.get(
                 scenarios: scenarios.map((sc: TestScenarioRow): ExportedScenario => {
                   const steps = db
                     .prepare(
-                      'SELECT * FROM test_steps WHERE test_scenario_id = ? ORDER BY order_index ASC'
+                      'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC'
                     )
-                    .all(sc.id) as TestStepRow[];
+                    .all(sc.id, releaseId) as TestStepRow[];
                   return {
                     id: sc.id,
                     name: sc.name,

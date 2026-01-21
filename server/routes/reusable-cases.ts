@@ -4,7 +4,7 @@
  */
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getRegistryDb, getReleaseDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type {
   ReusableCaseRow,
   ReusableCaseStepRow,
@@ -116,7 +116,7 @@ interface IdResult {
 // GET /api/reusable-cases - List all reusable cases
 router.get('/', (_req: Request, res: Response<ApiResponse<ReusableCaseWithStepCount[]>>): void => {
   try {
-    const db = getRegistryDb();
+    const db = getDb();
     const cases = db
       .prepare(
         `
@@ -144,7 +144,7 @@ router.get(
     const { id } = req.params;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       const reusableCase = db
         .prepare(
@@ -194,7 +194,7 @@ router.post(
     }
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Create the reusable case
       const result = db
@@ -257,7 +257,7 @@ router.put(
     const { name, description } = req.body;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       const existing = db.prepare('SELECT id FROM reusable_cases WHERE id = ?').get(id) as
         | IdResult
@@ -289,7 +289,7 @@ router.delete('/:id', (req: Request<IdParams>, res: Response<ApiResponse<undefin
   const { id } = req.params;
 
   try {
-    const db = getRegistryDb();
+    const db = getDb();
 
     const existing = db.prepare('SELECT id FROM reusable_cases WHERE id = ?').get(id) as
       | IdResult
@@ -329,11 +329,10 @@ router.post(
     }
 
     try {
-      const registryDb = getRegistryDb();
-      const releaseDb = getReleaseDb(releaseId);
+      const db = getDb();
 
       // Get the reusable case
-      const reusableCase = registryDb
+      const reusableCase = db
         .prepare(
           `
         SELECT * FROM reusable_cases WHERE id = ?
@@ -347,7 +346,7 @@ router.post(
       }
 
       // Get the steps
-      const steps = registryDb
+      const steps = db
         .prepare(
           `
         SELECT * FROM reusable_case_steps
@@ -358,51 +357,58 @@ router.post(
         .all(id) as ReusableCaseStepRow[];
 
       // Get max order_index for test cases in this test set
-      const maxOrder = releaseDb
+      const maxOrder = db
         .prepare(
           `
         SELECT COALESCE(MAX(order_index), -1) as max_order
-        FROM test_cases WHERE test_set_id = ?
+        FROM test_cases WHERE test_set_id = ? AND release_id = ?
       `
         )
-        .get(testSetId) as MaxOrderResult;
+        .get(testSetId, releaseId) as MaxOrderResult;
       const newOrderIndex = (maxOrder?.max_order ?? -1) + 1;
 
-      // Create the test case in the release database
-      const caseResult = releaseDb
+      // Create the test case in the unified database with release_id
+      const caseResult = db
         .prepare(
           `
-        INSERT INTO test_cases (test_set_id, name, description, order_index)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO test_cases (release_id, test_set_id, name, description, order_index)
+        VALUES (?, ?, ?, ?, ?)
       `
         )
-        .run(testSetId, reusableCase.name, reusableCase.description || '', newOrderIndex);
+        .run(
+          releaseId,
+          testSetId,
+          reusableCase.name,
+          reusableCase.description || '',
+          newOrderIndex
+        );
 
       const newCaseId = caseResult.lastInsertRowid;
 
-      // Create a default scenario for this case
-      const scenarioResult = releaseDb
+      // Create a default scenario for this case with release_id
+      const scenarioResult = db
         .prepare(
           `
-        INSERT INTO test_scenarios (test_case_id, name, order_index)
-        VALUES (?, ?, 0)
+        INSERT INTO test_scenarios (release_id, test_case_id, name, order_index)
+        VALUES (?, ?, ?, 0)
       `
         )
-        .run(newCaseId, 'Default Scenario');
+        .run(releaseId, newCaseId, 'Default Scenario');
 
       const newScenarioId = scenarioResult.lastInsertRowid;
 
-      // Copy the steps to the new scenario
+      // Copy the steps to the new scenario with release_id
       if (steps.length > 0) {
-        const insertStep = releaseDb.prepare(`
+        const insertStep = db.prepare(`
           INSERT INTO test_steps (
-            test_scenario_id, order_index, step_definition, type, element_id,
+            release_id, test_scenario_id, order_index, step_definition, type, element_id,
             action, action_result, select_config_id, match_config_id, required, expected_results
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         steps.forEach((step) => {
           insertStep.run(
+            releaseId,
             newScenarioId,
             step.order_index,
             step.step_definition || '',
@@ -450,17 +456,16 @@ router.post(
     }
 
     try {
-      const registryDb = getRegistryDb();
-      const releaseDb = getReleaseDb(releaseId);
+      const db = getDb();
 
-      // Get the test case
-      const testCase = releaseDb
+      // Get the test case from the unified database
+      const testCase = db
         .prepare(
           `
-        SELECT * FROM test_cases WHERE id = ?
+        SELECT * FROM test_cases WHERE id = ? AND release_id = ?
       `
         )
-        .get(caseId) as TestCaseRow | undefined;
+        .get(caseId, releaseId) as TestCaseRow | undefined;
 
       if (!testCase) {
         res.status(404).json({ success: false, error: 'Test case not found' });
@@ -468,25 +473,25 @@ router.post(
       }
 
       // Get all scenarios and their steps for this case
-      const scenarios = releaseDb
+      const scenarios = db
         .prepare(
           `
-        SELECT * FROM test_scenarios WHERE test_case_id = ? ORDER BY order_index ASC
+        SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC
       `
         )
-        .all(caseId) as TestScenarioRow[];
+        .all(caseId, releaseId) as TestScenarioRow[];
 
       // Collect all steps from all scenarios
       const allSteps: (TestStepRow & { order_index: number })[] = [];
       let stepIndex = 0;
       for (const scenario of scenarios) {
-        const steps = releaseDb
+        const steps = db
           .prepare(
             `
-          SELECT * FROM test_steps WHERE test_scenario_id = ? ORDER BY order_index ASC
+          SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC
         `
           )
-          .all(scenario.id) as TestStepRow[];
+          .all(scenario.id, releaseId) as TestStepRow[];
 
         for (const step of steps) {
           allSteps.push({ ...step, order_index: stepIndex++ });
@@ -497,7 +502,7 @@ router.post(
       const reusableName = name || testCase.name;
       const reusableDesc = description || testCase.description;
 
-      const result = registryDb
+      const result = db
         .prepare(
           `
         INSERT INTO reusable_cases (name, description, created_by)
@@ -510,7 +515,7 @@ router.post(
 
       // Insert all steps
       if (allSteps.length > 0) {
-        const insertStep = registryDb.prepare(`
+        const insertStep = db.prepare(`
           INSERT INTO reusable_case_steps (
             reusable_case_id, order_index, step_definition, type, element_id,
             action, action_result, select_config_id, match_config_id, required, expected_results
@@ -557,7 +562,7 @@ router.get(
     const { id } = req.params;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
       const steps = db
         .prepare(
           `
@@ -588,7 +593,7 @@ router.post(
     const step = req.body;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Get max order_index
       const maxOrder = db
@@ -647,7 +652,7 @@ router.patch(
     const updates = req.body;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
@@ -678,7 +683,7 @@ router.delete(
     const { id, stepId } = req.params;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
       db.prepare(
         `
         DELETE FROM reusable_case_steps
@@ -706,7 +711,7 @@ router.put(
     const { steps } = req.body;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       const updateStep = db.prepare(`
         UPDATE reusable_case_steps
@@ -739,7 +744,7 @@ router.put(
     const { steps } = req.body;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       const syncTransaction = db.transaction((stepsToSync: ReusableCaseStepInput[]) => {
         // Delete existing steps

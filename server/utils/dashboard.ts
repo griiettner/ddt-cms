@@ -1,4 +1,4 @@
-import { getRegistryDb, getReleaseDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type { DatabaseInstance, CountResult, TestRunRow } from '../types/index.js';
 
 /**
@@ -63,14 +63,28 @@ const parseRecentRuns = (runs: TestRunWithRelease[]): ParsedTestRun[] => {
  * @returns Dashboard statistics
  */
 export const getDashboardStats = (releaseId?: string | number): DashboardStats => {
-  const registry: DatabaseInstance = getRegistryDb();
+  const db: DatabaseInstance = getDb();
 
   if (!releaseId) {
-    // If no release selected, return global stats from registry
+    // Global stats - query all data from the unified database
     const totalReleases = (
-      registry.prepare('SELECT COUNT(*) as count FROM releases').get() as CountResult
+      db.prepare('SELECT COUNT(*) as count FROM releases').get() as CountResult
     ).count;
-    const recentRunsRaw = registry
+
+    const totalSets = (db.prepare('SELECT COUNT(*) as count FROM test_sets').get() as CountResult)
+      .count;
+
+    const totalCases = (db.prepare('SELECT COUNT(*) as count FROM test_cases').get() as CountResult)
+      .count;
+
+    const totalScenarios = (
+      db.prepare('SELECT COUNT(*) as count FROM test_scenarios').get() as CountResult
+    ).count;
+
+    const totalSteps = (db.prepare('SELECT COUNT(*) as count FROM test_steps').get() as CountResult)
+      .count;
+
+    const recentRunsRaw = db
       .prepare(
         `
       SELECT tr.*, r.release_number
@@ -82,33 +96,50 @@ export const getDashboardStats = (releaseId?: string | number): DashboardStats =
       .all() as TestRunWithRelease[];
     const recentRuns = parseRecentRuns(recentRunsRaw);
 
+    // Get pass/fail from last run
+    const lastRun = recentRuns.length > 0 ? recentRuns[0] : null;
+    const lastRunPassed = lastRun?.passed_steps || 0;
+    const lastRunFailed = lastRun?.failed_steps || 0;
+
     return {
       totalReleases,
-      totalSets: 0,
-      totalCases: 0,
-      totalScenarios: 0,
-      totalSteps: 0,
-      lastRunPassed: 0,
-      lastRunFailed: 0,
+      totalSets,
+      totalCases,
+      totalScenarios,
+      totalSteps,
+      lastRunPassed,
+      lastRunFailed,
       recentRuns,
     };
   }
 
-  // Release specific stats
-  const db: DatabaseInstance = getReleaseDb(releaseId);
-  const totalTestSets = (db.prepare('SELECT COUNT(*) as count FROM test_sets').get() as CountResult)
-    .count;
+  // Release specific stats - all from the unified database filtered by release_id
+  const totalTestSets = (
+    db
+      .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
+      .get(releaseId) as CountResult
+  ).count;
+
   const totalTestCases = (
-    db.prepare('SELECT COUNT(*) as count FROM test_cases').get() as CountResult
+    db
+      .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
+      .get(releaseId) as CountResult
   ).count;
+
   const totalScenarios = (
-    db.prepare('SELECT COUNT(*) as count FROM test_scenarios').get() as CountResult
+    db
+      .prepare('SELECT COUNT(*) as count FROM test_scenarios WHERE release_id = ?')
+      .get(releaseId) as CountResult
   ).count;
-  const totalSteps = (db.prepare('SELECT COUNT(*) as count FROM test_steps').get() as CountResult)
-    .count;
+
+  const totalSteps = (
+    db
+      .prepare('SELECT COUNT(*) as count FROM test_steps WHERE release_id = ?')
+      .get(releaseId) as CountResult
+  ).count;
 
   // Get recent runs for this release
-  const recentRunsRaw = registry
+  const recentRunsRaw = db
     .prepare(
       `
     SELECT tr.*, r.release_number

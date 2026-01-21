@@ -1,12 +1,12 @@
-import Database from 'better-sqlite3';
+import { getDb } from './database.js';
 import type { DatabaseInstance, TypeConfig, ActionConfig } from '../types/index.js';
 
 /**
- * Seeds a release database with default configuration options
- * @param dbPath - Path to the release database file
+ * Seeds the database with default configuration options
+ * This seeds global defaults (release_id = NULL) that can be overridden per-release
  */
-export const seedConfiguration = (dbPath: string): void => {
-  const db: DatabaseInstance = new Database(dbPath);
+export const seedConfiguration = (): void => {
+  const db: DatabaseInstance = getDb();
 
   const types: TypeConfig[] = [
     { key: 'button-click', name: 'button-click' },
@@ -38,10 +38,11 @@ export const seedConfiguration = (dbPath: string): void => {
     { key: 'Visible', name: 'Visible', result_type: 'bool' },
   ];
 
+  // Insert global defaults (release_id = NULL)
   const insertConfig = db.prepare(`
     INSERT OR IGNORE INTO configuration_options
-    (category, key, display_name, result_type, order_index)
-    VALUES (?, ?, ?, ?, ?)
+    (release_id, category, key, display_name, result_type, order_index)
+    VALUES (NULL, ?, ?, ?, ?, ?)
   `);
 
   const transaction = db.transaction((): void => {
@@ -50,5 +51,4 @@ export const seedConfiguration = (dbPath: string): void => {
   });
 
   transaction();
-  db.close();
 };

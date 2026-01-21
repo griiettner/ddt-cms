@@ -1,11 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import path from 'path';
-import fs from 'fs';
-import { getRegistryDb } from '../db/database.js';
-import { initReleaseSchema } from '../db/migrations.js';
-import { seedConfiguration } from '../db/seed.js';
-import Database from 'better-sqlite3';
+import { getDb } from '../db/database.js';
 import type {
   AuthenticatedRequest,
   ReleaseRow,
@@ -15,7 +10,6 @@ import type {
 } from '../types/index.js';
 
 const router: Router = express.Router();
-const RELEASES_DB_DIR: string = process.env.RELEASES_DB_DIR || 'data/releases';
 
 // Query types
 interface ReleasesListQuery {
@@ -68,7 +62,7 @@ router.get(
     const offset: number = (pageNum - 1) * limitNum;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
       let query = 'SELECT * FROM releases WHERE 1=1';
       let countQuery = 'SELECT COUNT(*) as total FROM releases WHERE 1=1';
       const params: (string | number)[] = [];
@@ -104,27 +98,18 @@ router.get(
       const total: number = totalResult.total;
       const releases = db.prepare(query).all(...params, limitNum, offset) as ReleaseRow[];
 
-      // Fetch counts for each release
+      // Fetch counts for each release from the unified database
       const data: ReleaseWithCounts[] = releases.map((r: ReleaseRow): ReleaseWithCounts => {
-        let testSetCount = 0;
-        let testCaseCount = 0;
-        const dbPath = path.join(RELEASES_DB_DIR, `${r.id}.db`);
-
-        if (fs.existsSync(dbPath)) {
-          try {
-            const relDb = new Database(dbPath, { readonly: true });
-            testSetCount = (
-              relDb.prepare('SELECT COUNT(*) as count FROM test_sets').get() as CountResult
-            ).count;
-            testCaseCount = (
-              relDb.prepare('SELECT COUNT(*) as count FROM test_cases').get() as CountResult
-            ).count;
-            relDb.close();
-          } catch (e) {
-            const error = e as Error;
-            console.warn(`Could not read counts for release ${r.id}`, error.message);
-          }
-        }
+        const testSetCount = (
+          db
+            .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
+            .get(r.id) as CountResult
+        ).count;
+        const testCaseCount = (
+          db
+            .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
+            .get(r.id) as CountResult
+        ).count;
 
         return { ...r, testSetCount, testCaseCount };
       });
@@ -150,18 +135,16 @@ router.post(
     const authReq = req as AuthenticatedRequest;
     const user: string = authReq.user?.eid || 'anonymous';
 
-    console.log('[POST /api/releases] Body:', req.body);
-    console.log('[POST /api/releases] User:', user);
-
     if (!release_number) {
       res.status(400).json({ success: false, error: 'Release number is required' });
       return;
     }
 
-    let registry;
     try {
-      registry = getRegistryDb();
-      const existing = registry
+      const db = getDb();
+
+      // Check if release number already exists
+      const existing = db
         .prepare('SELECT id FROM releases WHERE release_number = ?')
         .get(release_number) as ReleaseRow | undefined;
       if (existing) {
@@ -169,32 +152,24 @@ router.post(
         return;
       }
 
-      const latestRelease = registry
+      // Find the latest open release to copy data from
+      const latestRelease = db
         .prepare("SELECT id FROM releases WHERE status = 'open' ORDER BY created_at DESC LIMIT 1")
         .get() as ReleaseRow | undefined;
 
-      const stmt = registry.prepare(
+      // Insert the new release
+      const stmt = db.prepare(
         'INSERT INTO releases (release_number, description, notes, created_by, status) VALUES (?, ?, ?, ?, ?)'
       );
       const result = stmt.run(release_number, description || '', notes || '', user, 'open');
       const newReleaseId = result.lastInsertRowid;
 
-      const newDbPath = path.join(RELEASES_DB_DIR, `${newReleaseId}.db`);
-
+      // If there's a previous release, copy its test data to the new release
       if (latestRelease) {
-        const oldDbPath = path.join(RELEASES_DB_DIR, `${latestRelease.id}.db`);
-        if (fs.existsSync(oldDbPath)) {
-          fs.copyFileSync(oldDbPath, newDbPath);
-          const newDb = new Database(newDbPath);
-          newDb.prepare('UPDATE test_sets SET release_id = ?').run(newReleaseId);
-          newDb.close();
-        } else {
-          initReleaseSchema(newDbPath);
-          seedConfiguration(newDbPath);
-        }
+        copyReleaseData(db, latestRelease.id, newReleaseId as number);
       } else {
-        initReleaseSchema(newDbPath);
-        seedConfiguration(newDbPath);
+        // Seed default configuration options for the new release
+        seedDefaultConfig(db, newReleaseId as number);
       }
 
       res.json({ success: true, data: { id: newReleaseId, release_number } });
@@ -207,32 +182,256 @@ router.post(
   }
 );
 
+/**
+ * Copy test data from one release to another
+ */
+function copyReleaseData(
+  db: ReturnType<typeof getDb>,
+  sourceReleaseId: number,
+  targetReleaseId: number
+): void {
+  // ID mappings for foreign key references
+  const testSetMapping = new Map<number, number>();
+  const testCaseMapping = new Map<number, number>();
+  const scenarioMapping = new Map<number, number>();
+
+  // Copy test_sets
+  interface TestSetRow {
+    id: number;
+    category_id: number | null;
+    name: string;
+    description: string | null;
+    created_at: string;
+    created_by: string | null;
+  }
+  const testSets = db
+    .prepare('SELECT * FROM test_sets WHERE release_id = ?')
+    .all(sourceReleaseId) as TestSetRow[];
+
+  const insertTestSet = db.prepare(
+    'INSERT INTO test_sets (release_id, category_id, name, description, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  for (const ts of testSets) {
+    const result = insertTestSet.run(
+      targetReleaseId,
+      ts.category_id,
+      ts.name,
+      ts.description,
+      ts.created_at,
+      ts.created_by
+    );
+    testSetMapping.set(ts.id, result.lastInsertRowid as number);
+  }
+
+  // Copy test_cases
+  interface TestCaseRow {
+    id: number;
+    test_set_id: number;
+    name: string;
+    description: string | null;
+    order_index: number;
+    created_at: string;
+  }
+  const testCases = db
+    .prepare('SELECT * FROM test_cases WHERE release_id = ?')
+    .all(sourceReleaseId) as TestCaseRow[];
+
+  const insertTestCase = db.prepare(
+    'INSERT INTO test_cases (release_id, test_set_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  for (const tc of testCases) {
+    const newTestSetId = testSetMapping.get(tc.test_set_id);
+    if (newTestSetId !== undefined) {
+      const result = insertTestCase.run(
+        targetReleaseId,
+        newTestSetId,
+        tc.name,
+        tc.description,
+        tc.order_index,
+        tc.created_at
+      );
+      testCaseMapping.set(tc.id, result.lastInsertRowid as number);
+    }
+  }
+
+  // Copy test_scenarios
+  interface TestScenarioRow {
+    id: number;
+    test_case_id: number;
+    name: string;
+    description: string | null;
+    order_index: number;
+    created_at: string;
+  }
+  const scenarios = db
+    .prepare('SELECT * FROM test_scenarios WHERE release_id = ?')
+    .all(sourceReleaseId) as TestScenarioRow[];
+
+  const insertScenario = db.prepare(
+    'INSERT INTO test_scenarios (release_id, test_case_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+
+  for (const sc of scenarios) {
+    const newTestCaseId = testCaseMapping.get(sc.test_case_id);
+    if (newTestCaseId !== undefined) {
+      const result = insertScenario.run(
+        targetReleaseId,
+        newTestCaseId,
+        sc.name,
+        sc.description,
+        sc.order_index,
+        sc.created_at
+      );
+      scenarioMapping.set(sc.id, result.lastInsertRowid as number);
+    }
+  }
+
+  // Copy test_steps
+  interface TestStepRow {
+    id: number;
+    test_scenario_id: number;
+    order_index: number;
+    step_definition: string;
+    type: string | null;
+    element_id: string | null;
+    action: string | null;
+    action_result: string | null;
+    select_config_id: number | null;
+    match_config_id: number | null;
+    required: number;
+    expected_results: string | null;
+    created_at: string;
+    updated_at: string;
+  }
+  const steps = db
+    .prepare('SELECT * FROM test_steps WHERE release_id = ?')
+    .all(sourceReleaseId) as TestStepRow[];
+
+  const insertStep = db.prepare(`
+    INSERT INTO test_steps (
+      release_id, test_scenario_id, order_index, step_definition, type, element_id,
+      action, action_result, select_config_id, match_config_id, required, expected_results,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const step of steps) {
+    const newScenarioId = scenarioMapping.get(step.test_scenario_id);
+    if (newScenarioId !== undefined) {
+      insertStep.run(
+        targetReleaseId,
+        newScenarioId,
+        step.order_index,
+        step.step_definition,
+        step.type,
+        step.element_id,
+        step.action,
+        step.action_result,
+        step.select_config_id,
+        step.match_config_id,
+        step.required,
+        step.expected_results,
+        step.created_at,
+        step.updated_at
+      );
+    }
+  }
+
+  // Copy configuration_options (release-specific)
+  interface ConfigOptionRow {
+    category: string;
+    key: string;
+    display_name: string;
+    result_type: string | null;
+    default_value: string | null;
+    config_data: string | null;
+    is_active: number;
+    order_index: number;
+  }
+  const configs = db
+    .prepare('SELECT * FROM configuration_options WHERE release_id = ?')
+    .all(sourceReleaseId) as ConfigOptionRow[];
+
+  const insertConfig = db.prepare(`
+    INSERT INTO configuration_options (
+      release_id, category, key, display_name, result_type, default_value, config_data, is_active, order_index
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const config of configs) {
+    insertConfig.run(
+      targetReleaseId,
+      config.category,
+      config.key,
+      config.display_name,
+      config.result_type,
+      config.default_value,
+      config.config_data,
+      config.is_active,
+      config.order_index
+    );
+  }
+}
+
+/**
+ * Seed default configuration options for a new release
+ */
+function seedDefaultConfig(db: ReturnType<typeof getDb>, releaseId: number): void {
+  const types = [
+    { key: 'button-click', name: 'button-click' },
+    { key: 'button-click-redirect', name: 'button-click-redirect' },
+    { key: 'field-checkbox', name: 'field-checkbox' },
+    { key: 'field-error', name: 'field-error' },
+    { key: 'field-input', name: 'field-input' },
+    { key: 'field-label', name: 'field-label' },
+    { key: 'field-options', name: 'field-options' },
+    { key: 'field-radio', name: 'field-radio' },
+    { key: 'field-select', name: 'field-select' },
+    { key: 'field-textarea', name: 'field-textarea' },
+    { key: 'text-link', name: 'text-link' },
+    { key: 'text-plain', name: 'text-plain' },
+    { key: 'ui-card', name: 'ui-card' },
+    { key: 'ui-element', name: 'ui-element' },
+    { key: 'url-validate', name: 'url-validate' },
+    { key: 'url-visit', name: 'url-visit' },
+  ];
+
+  const actions = [
+    { key: 'Active', name: 'Active', result_type: 'text' },
+    { key: 'Click', name: 'Click', result_type: 'disabled' },
+    { key: 'Custom Select', name: 'Custom Select', result_type: 'select' },
+    { key: 'Options Match', name: 'Options Match', result_type: 'array' },
+    { key: 'Text Match', name: 'Text Match', result_type: 'text' },
+    { key: 'Text Plain', name: 'Text Plain', result_type: 'text' },
+    { key: 'URL', name: 'URL', result_type: 'select' },
+    { key: 'Visible', name: 'Visible', result_type: 'bool' },
+  ];
+
+  const insertConfig = db.prepare(`
+    INSERT INTO configuration_options (release_id, category, key, display_name, result_type, order_index)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  types.forEach((t, i) => insertConfig.run(releaseId, 'type', t.key, t.name, null, i));
+  actions.forEach((a, i) => insertConfig.run(releaseId, 'action', a.key, a.name, a.result_type, i));
+}
+
 // PATCH /api/releases/:id - Update release details or notes
 router.patch(
   '/:id',
   (req: Request<ReleaseIdParams, unknown, UpdateReleaseBody>, res: Response): void => {
     const { release_number, description, notes } = req.body;
-    const registry = getRegistryDb();
+    const db = getDb();
 
     try {
-      const release = registry
-        .prepare('SELECT status FROM releases WHERE id = ?')
-        .get(req.params.id) as ReleaseRow | undefined;
+      const release = db.prepare('SELECT status FROM releases WHERE id = ?').get(req.params.id) as
+        | ReleaseRow
+        | undefined;
       if (!release) {
         res.status(404).json({ success: false, error: 'Release not found' });
         return;
-      }
-
-      // Notes can be updated even if closed? Re-reading requirements...
-      // "closed releases are read-only" usually refers to the test data.
-      // But let's assume notes are editable if not explicitly forbidden.
-      // Actually, "closed releases are read-only" likely includes the release details too.
-      if (release.status === 'closed' && (release_number || description)) {
-        // Maybe allow notes update but not metadata?
-        // Requirement says: "Closed releases are read-only".
-        // Let's stick to that.
-        // res.status(400).json({ success: false, error: 'Closed releases are read-only' });
-        // return;
       }
 
       let query = 'UPDATE releases SET ';
@@ -259,7 +458,7 @@ router.patch(
       query += fields.join(', ') + ' WHERE id = ?';
       params.push(req.params.id);
 
-      registry.prepare(query).run(...params);
+      db.prepare(query).run(...params);
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -271,7 +470,7 @@ router.patch(
 // Actions
 router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void => {
   try {
-    const db = getRegistryDb();
+    const db = getDb();
     const authReq = req as AuthenticatedRequest;
     db.prepare(
       "UPDATE releases SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE id = ?"
@@ -285,7 +484,7 @@ router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void =>
 
 router.put('/:id/reopen', (req: Request<ReleaseIdParams>, res: Response): void => {
   try {
-    const db = getRegistryDb();
+    const db = getDb();
     db.prepare(
       "UPDATE releases SET status = 'open', closed_at = NULL, closed_by = NULL WHERE id = ?"
     ).run(req.params.id);
@@ -298,7 +497,7 @@ router.put('/:id/reopen', (req: Request<ReleaseIdParams>, res: Response): void =
 
 router.put('/:id/archive', (req: Request<ReleaseIdParams>, res: Response): void => {
   try {
-    const db = getRegistryDb();
+    const db = getDb();
     db.prepare("UPDATE releases SET status = 'archived' WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   } catch (err) {
@@ -309,10 +508,10 @@ router.put('/:id/archive', (req: Request<ReleaseIdParams>, res: Response): void 
 
 router.delete('/:id', (req: Request<ReleaseIdParams>, res: Response): void => {
   try {
-    const registry = getRegistryDb();
-    const release = registry
-      .prepare('SELECT status FROM releases WHERE id = ?')
-      .get(req.params.id) as ReleaseRow | undefined;
+    const db = getDb();
+    const release = db.prepare('SELECT status FROM releases WHERE id = ?').get(req.params.id) as
+      | ReleaseRow
+      | undefined;
     if (!release) {
       res.status(404).json({ success: false, error: 'Release not found' });
       return;
@@ -323,9 +522,14 @@ router.delete('/:id', (req: Request<ReleaseIdParams>, res: Response): void => {
       return;
     }
 
-    registry.prepare('DELETE FROM releases WHERE id = ?').run(req.params.id);
-    const dbPath = path.join(RELEASES_DB_DIR, `${req.params.id}.db`);
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    // With CASCADE deletes enabled, this will automatically delete:
+    // - test_sets
+    // - test_cases
+    // - test_scenarios
+    // - test_steps
+    // - configuration_options
+    // - test_runs
+    db.prepare('DELETE FROM releases WHERE id = ?').run(req.params.id);
 
     res.json({ success: true });
   } catch (err) {

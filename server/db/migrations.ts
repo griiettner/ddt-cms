@@ -1,14 +1,20 @@
-import { getRegistryDb } from './database.js';
-import Database from 'better-sqlite3';
+import { getDb } from './database.js';
 import type { DatabaseInstance, TableColumnInfo } from '../types/index.js';
 
 /**
- * Initializes the registry database schema
+ * Initializes the unified database schema
+ * This schema combines all tables (formerly split between registry and release DBs)
+ * into a single database with multi-tenancy via release_id foreign keys
  */
-export const initRegistrySchema = (): void => {
-  const db: DatabaseInstance = getRegistryDb();
+export const initSchema = (): void => {
+  const db: DatabaseInstance = getDb();
 
   db.exec(`
+    -- ================================
+    -- Core Registry Tables
+    -- ================================
+
+    -- Releases table
     CREATE TABLE IF NOT EXISTS releases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_number VARCHAR(50) UNIQUE NOT NULL,
@@ -23,6 +29,7 @@ export const initRegistrySchema = (): void => {
 
     CREATE INDEX IF NOT EXISTS idx_releases_status ON releases(status);
 
+    -- Test runs table
     CREATE TABLE IF NOT EXISTS test_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_id INTEGER NOT NULL,
@@ -118,45 +125,12 @@ export const initRegistrySchema = (): void => {
 
     CREATE INDEX IF NOT EXISTS idx_reusable_case_steps_case ON reusable_case_steps(reusable_case_id);
     CREATE INDEX IF NOT EXISTS idx_reusable_case_steps_order ON reusable_case_steps(reusable_case_id, order_index);
-  `);
 
-  // Migration: Add new columns to test_runs if they don't exist
-  try {
-    const columns = db.prepare('PRAGMA table_info(test_runs)').all() as TableColumnInfo[];
-    const columnNames: string[] = columns.map((c) => c.name);
+    -- ================================
+    -- Release-Specific Tables (with release_id FK)
+    -- ================================
 
-    if (!columnNames.includes('test_set_name')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN test_set_name VARCHAR(255)');
-    }
-    if (!columnNames.includes('total_scenarios')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN total_scenarios INTEGER DEFAULT 0');
-    }
-    if (!columnNames.includes('total_steps')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN total_steps INTEGER DEFAULT 0');
-    }
-    if (!columnNames.includes('passed_steps')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN passed_steps INTEGER DEFAULT 0');
-    }
-    if (!columnNames.includes('failed_steps')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN failed_steps INTEGER DEFAULT 0');
-    }
-    if (!columnNames.includes('failed_details')) {
-      db.exec('ALTER TABLE test_runs ADD COLUMN failed_details TEXT');
-    }
-  } catch (migrationErr) {
-    const error = migrationErr as Error;
-    console.error('Migration warning (non-fatal):', error.message);
-  }
-};
-
-/**
- * Initializes the schema for a specific release database
- * @param dbPath - Path to the release database file
- */
-export const initReleaseSchema = (dbPath: string): void => {
-  const db: DatabaseInstance = new Database(dbPath);
-
-  db.exec(`
+    -- Test sets (formerly in per-release DBs)
     CREATE TABLE IF NOT EXISTS test_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       release_id INTEGER NOT NULL,
@@ -164,40 +138,51 @@ export const initReleaseSchema = (dbPath: string): void => {
       name VARCHAR(255) NOT NULL,
       description TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      created_by VARCHAR(255)
+      created_by VARCHAR(255),
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE
     );
 
     CREATE INDEX IF NOT EXISTS idx_test_sets_release ON test_sets(release_id);
     CREATE INDEX IF NOT EXISTS idx_test_sets_category ON test_sets(category_id);
 
+    -- Test cases (formerly in per-release DBs)
     CREATE TABLE IF NOT EXISTS test_cases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      release_id INTEGER NOT NULL,
       test_set_id INTEGER NOT NULL,
       name VARCHAR(255) NOT NULL,
       description TEXT,
       order_index INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
       FOREIGN KEY (test_set_id) REFERENCES test_sets(id) ON DELETE CASCADE
     );
 
+    CREATE INDEX IF NOT EXISTS idx_test_cases_release ON test_cases(release_id);
     CREATE INDEX IF NOT EXISTS idx_test_cases_set ON test_cases(test_set_id);
     CREATE INDEX IF NOT EXISTS idx_test_cases_order ON test_cases(test_set_id, order_index);
 
+    -- Test scenarios (formerly in per-release DBs)
     CREATE TABLE IF NOT EXISTS test_scenarios (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      release_id INTEGER NOT NULL,
       test_case_id INTEGER NOT NULL,
       name VARCHAR(255) NOT NULL,
       description TEXT,
       order_index INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
       FOREIGN KEY (test_case_id) REFERENCES test_cases(id) ON DELETE CASCADE
     );
 
+    CREATE INDEX IF NOT EXISTS idx_test_scenarios_release ON test_scenarios(release_id);
     CREATE INDEX IF NOT EXISTS idx_test_scenarios_case ON test_scenarios(test_case_id);
     CREATE INDEX IF NOT EXISTS idx_test_scenarios_order ON test_scenarios(test_case_id, order_index);
 
+    -- Test steps (formerly in per-release DBs)
     CREATE TABLE IF NOT EXISTS test_steps (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      release_id INTEGER NOT NULL,
       test_scenario_id INTEGER NOT NULL,
       order_index INTEGER NOT NULL DEFAULT 0,
       step_definition TEXT NOT NULL,
@@ -211,14 +196,19 @@ export const initReleaseSchema = (dbPath: string): void => {
       expected_results TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
       FOREIGN KEY (test_scenario_id) REFERENCES test_scenarios(id) ON DELETE CASCADE
     );
 
+    CREATE INDEX IF NOT EXISTS idx_test_steps_release ON test_steps(release_id);
     CREATE INDEX IF NOT EXISTS idx_test_steps_scenario ON test_steps(test_scenario_id);
     CREATE INDEX IF NOT EXISTS idx_test_steps_order ON test_steps(test_scenario_id, order_index);
 
+    -- Configuration options (formerly in per-release DBs, now with optional release_id)
+    -- NULL release_id = global defaults, value = release-specific override
     CREATE TABLE IF NOT EXISTS configuration_options (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      release_id INTEGER,
       category VARCHAR(50) NOT NULL CHECK(category IN ('type', 'action')),
       key VARCHAR(100) NOT NULL,
       display_name VARCHAR(255) NOT NULL,
@@ -227,11 +217,104 @@ export const initReleaseSchema = (dbPath: string): void => {
       config_data TEXT,
       is_active BOOLEAN DEFAULT 1,
       order_index INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(category, key)
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+      UNIQUE(release_id, category, key)
     );
 
     CREATE INDEX IF NOT EXISTS idx_config_category ON configuration_options(category, is_active);
+    CREATE INDEX IF NOT EXISTS idx_config_release ON configuration_options(release_id);
   `);
 
-  db.close();
+  // Run migrations to ensure schema is up to date
+  runMigrations(db);
+};
+
+/**
+ * Run migrations to update schema for existing databases
+ */
+const runMigrations = (db: DatabaseInstance): void => {
+  try {
+    // Migration: Add new columns to test_runs if they don't exist
+    const testRunsColumns = db.prepare('PRAGMA table_info(test_runs)').all() as TableColumnInfo[];
+    const testRunsColumnNames: string[] = testRunsColumns.map((c) => c.name);
+
+    if (!testRunsColumnNames.includes('test_set_name')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN test_set_name VARCHAR(255)');
+    }
+    if (!testRunsColumnNames.includes('total_scenarios')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN total_scenarios INTEGER DEFAULT 0');
+    }
+    if (!testRunsColumnNames.includes('total_steps')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN total_steps INTEGER DEFAULT 0');
+    }
+    if (!testRunsColumnNames.includes('passed_steps')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN passed_steps INTEGER DEFAULT 0');
+    }
+    if (!testRunsColumnNames.includes('failed_steps')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN failed_steps INTEGER DEFAULT 0');
+    }
+    if (!testRunsColumnNames.includes('failed_details')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN failed_details TEXT');
+    }
+
+    // Migration: Add release_id to test_cases if not present (for legacy data)
+    const testCasesColumns = db.prepare('PRAGMA table_info(test_cases)').all() as TableColumnInfo[];
+    const testCasesColumnNames: string[] = testCasesColumns.map((c) => c.name);
+
+    if (!testCasesColumnNames.includes('release_id')) {
+      db.exec('ALTER TABLE test_cases ADD COLUMN release_id INTEGER');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_test_cases_release ON test_cases(release_id)');
+    }
+
+    // Migration: Add release_id to test_scenarios if not present
+    const testScenariosColumns = db
+      .prepare('PRAGMA table_info(test_scenarios)')
+      .all() as TableColumnInfo[];
+    const testScenariosColumnNames: string[] = testScenariosColumns.map((c) => c.name);
+
+    if (!testScenariosColumnNames.includes('release_id')) {
+      db.exec('ALTER TABLE test_scenarios ADD COLUMN release_id INTEGER');
+      db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_test_scenarios_release ON test_scenarios(release_id)'
+      );
+    }
+
+    // Migration: Add release_id to test_steps if not present
+    const testStepsColumns = db.prepare('PRAGMA table_info(test_steps)').all() as TableColumnInfo[];
+    const testStepsColumnNames: string[] = testStepsColumns.map((c) => c.name);
+
+    if (!testStepsColumnNames.includes('release_id')) {
+      db.exec('ALTER TABLE test_steps ADD COLUMN release_id INTEGER');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_test_steps_release ON test_steps(release_id)');
+    }
+
+    // Migration: Add release_id to configuration_options if not present
+    const configColumns = db
+      .prepare('PRAGMA table_info(configuration_options)')
+      .all() as TableColumnInfo[];
+    const configColumnNames: string[] = configColumns.map((c) => c.name);
+
+    if (!configColumnNames.includes('release_id')) {
+      db.exec('ALTER TABLE configuration_options ADD COLUMN release_id INTEGER');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_config_release ON configuration_options(release_id)');
+    }
+  } catch (err) {
+    const error = err as Error;
+    console.error('Migration warning (non-fatal):', error.message);
+  }
+};
+
+/**
+ * @deprecated Use initSchema() instead - this is kept for backward compatibility
+ */
+export const initRegistrySchema = (): void => {
+  initSchema();
+};
+
+/**
+ * @deprecated No longer needed - release data is now in the unified database
+ */
+export const initReleaseSchema = (_dbPath: string): void => {
+  console.warn('initReleaseSchema is deprecated - using unified schema');
+  initSchema();
 };

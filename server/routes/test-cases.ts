@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getReleaseDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type { TestCaseRow, TestScenarioRow } from '../types/index.js';
 
 const router: Router = express.Router();
@@ -70,10 +70,12 @@ router.get(
     }
 
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const testCases = db
-        .prepare('SELECT * FROM test_cases WHERE test_set_id = ? ORDER BY order_index ASC')
-        .all(testSetId) as TestCaseRow[];
+        .prepare(
+          'SELECT * FROM test_cases WHERE test_set_id = ? AND release_id = ? ORDER BY order_index ASC'
+        )
+        .all(testSetId, req.params.releaseId) as TestCaseRow[];
       res.json({ success: true, data: testCases });
     } catch (err) {
       const error = err as Error;
@@ -87,40 +89,44 @@ router.post(
   '/:releaseId',
   (req: Request<ReleaseIdParams, unknown, CreateTestCaseBody>, res: Response): void => {
     const { testSetId, name, description, order_index } = req.body;
+    const releaseId = req.params.releaseId;
+
     if (!testSetId || !name) {
       res.status(400).json({ success: false, error: 'testSetId and name are required' });
       return;
     }
 
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const stmt = db.prepare(
-        'INSERT INTO test_cases (test_set_id, name, description, order_index) VALUES (?, ?, ?, ?)'
+        'INSERT INTO test_cases (release_id, test_set_id, name, description, order_index) VALUES (?, ?, ?, ?, ?)'
       );
 
       // Use transaction to ensure both case and scenario are created
       const createWithScenario = db.transaction(
         (
+          relId: string,
           tsId: number,
           n: string,
           desc: string,
           idx: number
         ): { caseId: number | bigint; scenarioId: number | bigint } => {
-          const result = stmt.run(tsId, n, desc, idx);
+          const result = stmt.run(relId, tsId, n, desc, idx);
           const caseId = result.lastInsertRowid;
 
-          // Auto-create default scenario
+          // Auto-create default scenario with release_id
           const scenarioResult = db
             .prepare(
-              'INSERT INTO test_scenarios (test_case_id, name, description) VALUES (?, ?, ?)'
+              'INSERT INTO test_scenarios (release_id, test_case_id, name, description) VALUES (?, ?, ?, ?)'
             )
-            .run(caseId, 'Default Scenario', 'Auto-created default scenario');
+            .run(relId, caseId, 'Default Scenario', 'Auto-created default scenario');
 
           return { caseId, scenarioId: scenarioResult.lastInsertRowid };
         }
       );
 
       const { caseId, scenarioId } = createWithScenario(
+        releaseId,
         testSetId,
         name,
         description || '',
@@ -146,7 +152,7 @@ router.patch(
     const { name, description } = req.body;
 
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
       const updates: string[] = [];
       const params: (string | number)[] = [];
 
@@ -164,8 +170,10 @@ router.patch(
         return;
       }
 
-      params.push(id);
-      db.prepare(`UPDATE test_cases SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+      params.push(id, releaseId);
+      db.prepare(`UPDATE test_cases SET ${updates.join(', ')} WHERE id = ? AND release_id = ?`).run(
+        ...params
+      );
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -179,12 +187,12 @@ router.delete('/:releaseId/:id', (req: Request<TestCaseIdParams>, res: Response)
   const { releaseId, id } = req.params;
 
   try {
-    const db = getReleaseDb(releaseId);
+    const db = getDb();
 
     // Verify the test case exists before delete
-    const existingCase = db.prepare('SELECT id, name FROM test_cases WHERE id = ?').get(id) as
-      | TestCaseRow
-      | undefined;
+    const existingCase = db
+      .prepare('SELECT id, name FROM test_cases WHERE id = ? AND release_id = ?')
+      .get(id, releaseId) as TestCaseRow | undefined;
     if (!existingCase) {
       console.log(`[DELETE] Test case ${id} not found in release ${releaseId}`);
       res.status(404).json({ success: false, error: 'Test case not found' });
@@ -202,8 +210,8 @@ router.delete('/:releaseId/:id', (req: Request<TestCaseIdParams>, res: Response)
     const result = db.transaction((): number => {
       // Get all scenarios for this test case
       const scenarios = db
-        .prepare('SELECT id FROM test_scenarios WHERE test_case_id = ?')
-        .all(id) as ScenarioId[];
+        .prepare('SELECT id FROM test_scenarios WHERE test_case_id = ? AND release_id = ?')
+        .all(id, releaseId) as ScenarioId[];
       console.log(`[DELETE] Found ${scenarios.length} scenarios to delete`);
 
       // Delete steps for each scenario
@@ -216,12 +224,14 @@ router.delete('/:releaseId/:id', (req: Request<TestCaseIdParams>, res: Response)
 
       // Delete all scenarios
       const scenariosDeleted = db
-        .prepare('DELETE FROM test_scenarios WHERE test_case_id = ?')
-        .run(id);
+        .prepare('DELETE FROM test_scenarios WHERE test_case_id = ? AND release_id = ?')
+        .run(id, releaseId);
       console.log(`[DELETE] Deleted ${scenariosDeleted.changes} scenarios`);
 
       // Delete the test case
-      const caseDeleted = db.prepare('DELETE FROM test_cases WHERE id = ?').run(id);
+      const caseDeleted = db
+        .prepare('DELETE FROM test_cases WHERE id = ? AND release_id = ?')
+        .run(id, releaseId);
       console.log(`[DELETE] Deleted ${caseDeleted.changes} test case(s)`);
 
       return caseDeleted.changes;
@@ -249,10 +259,10 @@ router.get(
       return;
     }
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const scenarios = db
-        .prepare('SELECT * FROM test_scenarios WHERE test_case_id = ?')
-        .all(testCaseId) as TestScenarioRow[];
+        .prepare('SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ?')
+        .all(testCaseId, req.params.releaseId) as TestScenarioRow[];
       res.json({ success: true, data: scenarios });
     } catch (err) {
       const error = err as Error;
@@ -266,12 +276,14 @@ router.post(
   '/scenarios/:releaseId',
   (req: Request<ReleaseIdParams, unknown, CreateScenarioBody>, res: Response): void => {
     const { testCaseId, name, description } = req.body;
+    const releaseId = req.params.releaseId;
+
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const stmt = db.prepare(
-        'INSERT INTO test_scenarios (test_case_id, name, description) VALUES (?, ?, ?)'
+        'INSERT INTO test_scenarios (release_id, test_case_id, name, description) VALUES (?, ?, ?, ?)'
       );
-      const result = stmt.run(testCaseId, name, description || '');
+      const result = stmt.run(releaseId, testCaseId, name, description || '');
       res.json({ success: true, data: { id: result.lastInsertRowid } });
     } catch (err) {
       const error = err as Error;
@@ -290,18 +302,18 @@ router.get(
       return;
     }
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
       const scenarios = db
         .prepare(
           `
             SELECT ts.*, tc.name as case_name
             FROM test_scenarios ts
             JOIN test_cases tc ON ts.test_case_id = tc.id
-            WHERE tc.test_set_id = ?
+            WHERE tc.test_set_id = ? AND tc.release_id = ?
             ORDER BY tc.order_index ASC, ts.order_index ASC
         `
         )
-        .all(testSetId) as ScenarioWithCaseName[];
+        .all(testSetId, req.params.releaseId) as ScenarioWithCaseName[];
       res.json({ success: true, data: scenarios });
     } catch (err) {
       const error = err as Error;
@@ -317,13 +329,15 @@ router.patch(
     const { releaseId, id } = req.params;
     const updates = req.body;
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
         .join(', ');
       const values = Object.values(updates);
-      const stmt = db.prepare(`UPDATE test_scenarios SET ${fields} WHERE id = ?`);
-      stmt.run(...values, id);
+      const stmt = db.prepare(
+        `UPDATE test_scenarios SET ${fields} WHERE id = ? AND release_id = ?`
+      );
+      stmt.run(...values, id, releaseId);
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -338,12 +352,15 @@ router.delete(
   (req: Request<ScenarioIdParams>, res: Response): void => {
     const { releaseId, id } = req.params;
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
       db.transaction(() => {
         // Delete steps first
-        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(id);
+        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ? AND release_id = ?').run(
+          id,
+          releaseId
+        );
         // Delete scenario
-        db.prepare('DELETE FROM test_scenarios WHERE id = ?').run(id);
+        db.prepare('DELETE FROM test_scenarios WHERE id = ? AND release_id = ?').run(id, releaseId);
       })();
       res.json({ success: true });
     } catch (err) {

@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getReleaseDb, getRegistryDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type {
   AuthenticatedRequest,
   TestSetRow,
@@ -51,12 +51,12 @@ interface TestSetWithDetails extends TestSetRow {
   category: CategoryRow | null;
 }
 
-// Helper to get category info from registry DB
+// Helper to get category info
 function getCategoryInfo(categoryId: number | null | undefined): CategoryRow | null {
   if (!categoryId) return null;
   try {
-    const registryDb = getRegistryDb();
-    return registryDb
+    const db = getDb();
+    return db
       .prepare('SELECT id, name, path, level FROM categories WHERE id = ?')
       .get(categoryId) as CategoryRow | null;
   } catch {
@@ -72,12 +72,13 @@ router.get(
     const pageNum: number = parseInt(page as string);
     const limitNum: number = parseInt(limit as string);
     const offset: number = (pageNum - 1) * limitNum;
+    const releaseId = req.params.releaseId;
 
     try {
-      const db = getReleaseDb(req.params.releaseId);
-      let query = 'SELECT * FROM test_sets WHERE 1=1';
-      let countQuery = 'SELECT COUNT(*) as total FROM test_sets WHERE 1=1';
-      const params: (string | number)[] = [];
+      const db = getDb();
+      let query = 'SELECT * FROM test_sets WHERE release_id = ?';
+      let countQuery = 'SELECT COUNT(*) as total FROM test_sets WHERE release_id = ?';
+      const params: (string | number)[] = [releaseId];
 
       if (search) {
         const searchPattern = `%${search}%`;
@@ -161,7 +162,7 @@ router.post(
     }
 
     try {
-      const db = getReleaseDb(releaseId);
+      const db = getDb();
       const stmt = db.prepare(
         'INSERT INTO test_sets (release_id, name, description, category_id, created_by) VALUES (?, ?, ?, ?, ?)'
       );
@@ -179,10 +180,10 @@ router.post(
 // GET /api/test-sets/:releaseId/:id - Get test set details
 router.get('/:releaseId/:id', (req: Request<TestSetIdParams>, res: Response): void => {
   try {
-    const db = getReleaseDb(req.params.releaseId);
-    const testSet = db.prepare('SELECT * FROM test_sets WHERE id = ?').get(req.params.id) as
-      | TestSetRow
-      | undefined;
+    const db = getDb();
+    const testSet = db
+      .prepare('SELECT * FROM test_sets WHERE id = ? AND release_id = ?')
+      .get(req.params.id, req.params.releaseId) as TestSetRow | undefined;
     if (!testSet) {
       res.status(404).json({ success: false, error: 'Test set not found' });
       return;
@@ -202,7 +203,7 @@ router.patch(
   (req: Request<TestSetIdParams, unknown, UpdateTestSetBody>, res: Response): void => {
     const { name, description, category_id } = req.body;
     try {
-      const db = getReleaseDb(req.params.releaseId);
+      const db = getDb();
 
       // Build dynamic update query
       const updates: string[] = [];
@@ -226,8 +227,10 @@ router.patch(
         return;
       }
 
-      params.push(req.params.id);
-      const stmt = db.prepare(`UPDATE test_sets SET ${updates.join(', ')} WHERE id = ?`);
+      params.push(req.params.id, req.params.releaseId);
+      const stmt = db.prepare(
+        `UPDATE test_sets SET ${updates.join(', ')} WHERE id = ? AND release_id = ?`
+      );
       stmt.run(...params);
 
       const updated = db.prepare('SELECT * FROM test_sets WHERE id = ?').get(req.params.id) as
@@ -245,8 +248,11 @@ router.patch(
 // DELETE /api/test-sets/:releaseId/:id - Delete test set
 router.delete('/:releaseId/:id', (req: Request<TestSetIdParams>, res: Response): void => {
   try {
-    const db = getReleaseDb(req.params.releaseId);
-    db.prepare('DELETE FROM test_sets WHERE id = ?').run(req.params.id);
+    const db = getDb();
+    db.prepare('DELETE FROM test_sets WHERE id = ? AND release_id = ?').run(
+      req.params.id,
+      req.params.releaseId
+    );
     res.json({ success: true });
   } catch (err) {
     const error = err as Error;
