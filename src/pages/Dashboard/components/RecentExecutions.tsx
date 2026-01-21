@@ -1,18 +1,7 @@
-interface TestRun {
-  id: number;
-  test_set_id?: number;
-  test_set_name?: string;
-  status?: string;
-  total_scenarios?: number;
-  total_steps?: number;
-  passed_steps?: number;
-  failed_steps?: number;
-  duration_ms?: number;
-  executed_at?: string;
-}
+import type { RecentRun } from '@/types/api';
 
 interface RecentExecutionsProps {
-  recentRuns: TestRun[] | null | undefined;
+  recentRuns: RecentRun[] | null | undefined;
 }
 
 function formatDuration(ms: number | undefined): string {

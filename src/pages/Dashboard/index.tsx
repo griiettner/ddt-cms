@@ -29,8 +29,8 @@ function Dashboard(): JSX.Element {
         <LoadingSpinner className="py-20" />
       ) : (
         <>
-          <StatsCards stats={stats?.stats} />
-          <RecentExecutions recentRuns={stats?.recentExecutions} />
+          <StatsCards stats={stats} />
+          <RecentExecutions recentRuns={stats?.recentRuns} />
         </>
       )}
 

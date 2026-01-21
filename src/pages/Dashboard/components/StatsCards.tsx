@@ -1,15 +1,7 @@
-interface DashboardStats {
-  totalTestSets?: number;
-  totalTestCases?: number;
-  totalScenarios?: number;
-  totalSteps?: number;
-  lastRunPassed?: number | null;
-  lastRunFailed?: number | null;
-  recentRuns?: unknown[];
-}
+import type { DashboardData } from '@/types/api';
 
 interface StatsCardsProps {
-  stats: DashboardStats | null | undefined;
+  stats: DashboardData | null | undefined;
 }
 
 function StatsCards({ stats }: StatsCardsProps): JSX.Element {
@@ -22,15 +14,29 @@ function StatsCards({ stats }: StatsCardsProps): JSX.Element {
     failCount !== null &&
     (passCount > 0 || failCount > 0);
 
+  // Handle both global (totalSets) and release-specific (totalTestSets) property names
+  const totalSets =
+    stats && 'totalTestSets' in stats
+      ? stats.totalTestSets
+      : stats && 'totalSets' in stats
+        ? stats.totalSets
+        : 0;
+  const totalCases =
+    stats && 'totalTestCases' in stats
+      ? stats.totalTestCases
+      : stats && 'totalCases' in stats
+        ? stats.totalCases
+        : 0;
+
   return (
     <div className="mb-8 grid grid-cols-6 gap-4">
       <div className="card">
         <p className="text-sm font-semibold uppercase tracking-wide text-co-gray-600">Sets</p>
-        <p className="mt-2 text-4xl font-bold text-co-blue">{stats?.totalTestSets ?? 0}</p>
+        <p className="mt-2 text-4xl font-bold text-co-blue">{totalSets}</p>
       </div>
       <div className="card">
         <p className="text-sm font-semibold uppercase tracking-wide text-co-gray-600">Cases</p>
-        <p className="mt-2 text-4xl font-bold text-co-blue">{stats?.totalTestCases ?? 0}</p>
+        <p className="mt-2 text-4xl font-bold text-co-blue">{totalCases}</p>
       </div>
       <div className="card">
         <p className="text-sm font-semibold uppercase tracking-wide text-co-gray-600">Scenarios</p>

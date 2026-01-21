@@ -316,28 +316,47 @@ export interface TestRunsResponse extends ApiResponse<TestRun[]> {
 export type TestRunResponse = ApiResponse<TestRun>;
 
 // Dashboard API Types
-export interface DashboardStats {
+export interface RecentRun {
+  id: number;
+  release_id: number;
+  test_set_id: number | null;
+  test_set_name: string | null;
+  status: string;
+  executed_at: string;
+  executed_by: string | null;
+  duration_ms: number;
+  total_scenarios: number;
+  total_steps: number;
+  passed_steps: number;
+  failed_steps: number;
+  failed_details: unknown[];
+  release_number: string | null;
+}
+
+// Global dashboard stats (no release selected)
+export interface GlobalDashboardData {
+  totalReleases: number;
+  totalSets: number;
+  totalCases: number;
+  totalScenarios: number;
+  totalSteps: number;
+  lastRunPassed: number;
+  lastRunFailed: number;
+  recentRuns: RecentRun[];
+}
+
+// Release-specific dashboard stats
+export interface ReleaseDashboardData {
   totalTestSets: number;
   totalTestCases: number;
   totalScenarios: number;
   totalSteps: number;
+  lastRunPassed: number;
+  lastRunFailed: number;
+  recentRuns: RecentRun[];
 }
 
-export interface RecentExecution {
-  id: number;
-  test_set_name: string;
-  status: string;
-  executed_at: string;
-  duration_ms: number;
-  total_steps: number;
-  passed_steps: number;
-  failed_steps: number;
-}
-
-export interface DashboardData {
-  stats: DashboardStats;
-  recentExecutions: RecentExecution[];
-}
+export type DashboardData = GlobalDashboardData | ReleaseDashboardData;
 
 export type DashboardResponse = ApiResponse<DashboardData>;
 
