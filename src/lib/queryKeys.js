@@ -95,6 +95,13 @@ export const queryKeys = {
     list: (releaseId) => ['testRuns', releaseId, 'list'],
     detail: (id) => ['testRuns', 'detail', id],
   },
+
+  // Reusable Cases queries (global)
+  reusableCases: {
+    all: ['reusableCases'],
+    list: () => ['reusableCases', 'list'],
+    detail: (id) => ['reusableCases', 'detail', id],
+  },
 };
 
 export default queryKeys;

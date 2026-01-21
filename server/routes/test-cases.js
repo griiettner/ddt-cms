@@ -90,24 +90,45 @@ router.delete('/:releaseId/:id', (req, res) => {
 
   try {
     const db = getReleaseDb(releaseId);
-    db.transaction(() => {
+
+    // Verify the test case exists before delete
+    const existingCase = db.prepare('SELECT id, name FROM test_cases WHERE id = ?').get(id);
+    if (!existingCase) {
+      console.log(`[DELETE] Test case ${id} not found in release ${releaseId}`);
+      return res.status(404).json({ success: false, error: 'Test case not found' });
+    }
+
+    console.log(`[DELETE] Deleting test case ${id} (${existingCase.name}) from release ${releaseId}`);
+
+    const result = db.transaction(() => {
       // Get all scenarios for this test case
       const scenarios = db.prepare('SELECT id FROM test_scenarios WHERE test_case_id = ?').all(id);
+      console.log(`[DELETE] Found ${scenarios.length} scenarios to delete`);
 
       // Delete steps for each scenario
       for (const scenario of scenarios) {
-        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenario.id);
+        const stepsDeleted = db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ?').run(scenario.id);
+        console.log(`[DELETE] Deleted ${stepsDeleted.changes} steps for scenario ${scenario.id}`);
       }
 
       // Delete all scenarios
-      db.prepare('DELETE FROM test_scenarios WHERE test_case_id = ?').run(id);
+      const scenariosDeleted = db.prepare('DELETE FROM test_scenarios WHERE test_case_id = ?').run(id);
+      console.log(`[DELETE] Deleted ${scenariosDeleted.changes} scenarios`);
 
       // Delete the test case
-      db.prepare('DELETE FROM test_cases WHERE id = ?').run(id);
+      const caseDeleted = db.prepare('DELETE FROM test_cases WHERE id = ?').run(id);
+      console.log(`[DELETE] Deleted ${caseDeleted.changes} test case(s)`);
+
+      return caseDeleted.changes;
     })();
 
-    res.json({ success: true });
+    if (result === 0) {
+      console.log(`[DELETE] Warning: No rows deleted for test case ${id}`);
+    }
+
+    res.json({ success: true, deleted: result > 0 });
   } catch (err) {
+    console.error(`[DELETE] Error deleting test case ${id}:`, err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

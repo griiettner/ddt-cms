@@ -63,12 +63,14 @@ function TestCases() {
     // Case modal
     handleOpenCaseModal,
     handleSubmitCase,
+    handleUseReusableCase,
     closeCaseModal,
     setCaseModalName,
 
     // Case edit/delete
     handleEditCase,
     handleDeleteCase,
+    handleSaveAsReusable,
     confirmDeleteCase,
     closeDeleteCaseConfirm,
 
@@ -170,6 +172,7 @@ function TestCases() {
         onAddScenario={handleOpenScenarioModal}
         onEditCase={handleEditCase}
         onDeleteCase={handleDeleteCase}
+        onSaveAsReusable={handleSaveAsReusable}
       />
 
       <div className="main-editor">
@@ -287,6 +290,7 @@ function TestCases() {
         isOpen={modals.case.open}
         onClose={closeCaseModal}
         onSubmit={handleSubmitCase}
+        onUseReusable={handleUseReusableCase}
         name={modals.case.name}
         setName={setCaseModalName}
       />

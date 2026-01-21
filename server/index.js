@@ -52,6 +52,9 @@ console.log('  - match-configs loaded');
 import categoryRoutes from './routes/categories.js';
 console.log('  - categories loaded');
 import testRunRoutes from './routes/test-runs.js';
+console.log('  - test-runs loaded');
+import reusableCasesRoutes from './routes/reusable-cases.js';
+console.log('  - reusable-cases loaded');
 console.log('=== ALL ROUTES LOADED ===');
 
 // Middleware
@@ -129,6 +132,7 @@ app.use('/api/select-configs', selectConfigRoutes);
 app.use('/api/match-configs', matchConfigRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/test-runs', testRunRoutes);
+app.use('/api/reusable-cases', reusableCasesRoutes);
 
 // SPA fallback - serve index.html for non-API routes when serving static files
 if (serveStatic) {

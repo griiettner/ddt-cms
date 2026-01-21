@@ -4,13 +4,14 @@ import { memo, useCallback } from 'react';
  * ActionResultCell - Renders the appropriate input based on action type
  * Uses internal state to prevent data loss
  */
-function ActionResultCell({ 
-  step, 
-  selectConfigs, 
-  matchConfigs, 
+function ActionResultCell({
+  step,
+  selectConfigs,
+  matchConfigs,
   onFieldChange,
   onOpenSelectConfig,
-  onOpenMatchConfig 
+  onOpenMatchConfig,
+  showConfigButtons = true,
 }) {
   const actionKey = step.action || '';
 
@@ -76,15 +77,17 @@ function ActionResultCell({
               <option key={`${o}-${idx}`} value={o}>{o}</option>
             ))}
           </select>
-          <button
-            className="select-config-btn"
-            onClick={() => onOpenSelectConfig(step.id, actionKey)}
-            title="Manage dropdown options"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-            </svg>
-          </button>
+          {showConfigButtons && (
+            <button
+              className="select-config-btn"
+              onClick={() => onOpenSelectConfig(step.id, actionKey)}
+              title="Manage dropdown options"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          )}
         </div>
       );
     }
@@ -102,15 +105,17 @@ function ActionResultCell({
             value={step.action_result || '[]'}
             title={`Options: ${JSON.stringify(options)}`}
           />
-          <button
-            className="match-config-btn"
-            onClick={() => onOpenMatchConfig(step.id)}
-            title="Manage match options"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-            </svg>
-          </button>
+          {showConfigButtons && (
+            <button
+              className="match-config-btn"
+              onClick={() => onOpenMatchConfig(step.id)}
+              title="Manage match options"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          )}
         </div>
       );
     }

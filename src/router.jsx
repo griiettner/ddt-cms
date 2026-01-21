@@ -27,6 +27,7 @@ import TestSets from './pages/TestSets/index';
 import TestCases from './pages/TestCases/index';
 import TestRuns from './pages/TestRuns/index';
 import Settings from './pages/Settings/index';
+import ReusableCaseEditor from './pages/ReusableCaseEditor/index';
 import NotFound from './pages/NotFound';
 
 // Root layout component
@@ -104,6 +105,16 @@ const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/$releaseId/settings',
   component: Settings,
+  validateSearch: (search) => ({
+    tab: search.tab || 'config',
+  }),
+});
+
+// Reusable Case Editor route
+const reusableCaseEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/$releaseId/settings/reusable-cases/$reusableCaseId',
+  component: ReusableCaseEditor,
 });
 
 // 404 route
@@ -131,6 +142,7 @@ const routeTree = rootRoute.addChildren([
   testCasesRoute,
   testRunsRoute,
   settingsRoute,
+  reusableCaseEditorRoute,
   notFoundRoute,
   catchAllRoute,
 ]);

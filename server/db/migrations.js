@@ -86,6 +86,39 @@ export const initRegistrySchema = () => {
     CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
     CREATE INDEX IF NOT EXISTS idx_categories_path ON categories(path);
     CREATE INDEX IF NOT EXISTS idx_categories_lft_rgt ON categories(lft, rgt);
+
+    -- Reusable Cases (global templates that can be copied to any release)
+    CREATE TABLE IF NOT EXISTS reusable_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_by VARCHAR(255),
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reusable_cases_name ON reusable_cases(name);
+
+    -- Steps for reusable cases
+    CREATE TABLE IF NOT EXISTS reusable_case_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reusable_case_id INTEGER NOT NULL,
+      order_index INTEGER NOT NULL DEFAULT 0,
+      step_definition TEXT,
+      type VARCHAR(50),
+      element_id VARCHAR(255),
+      action VARCHAR(50),
+      action_result TEXT,
+      select_config_id INTEGER,
+      match_config_id INTEGER,
+      required BOOLEAN DEFAULT 0,
+      expected_results TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (reusable_case_id) REFERENCES reusable_cases(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reusable_case_steps_case ON reusable_case_steps(reusable_case_id);
+    CREATE INDEX IF NOT EXISTS idx_reusable_case_steps_order ON reusable_case_steps(reusable_case_id, order_index);
   `);
 
   // Migration: Add new columns to test_runs if they don't exist

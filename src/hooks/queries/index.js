@@ -22,3 +22,7 @@ export {
   useUpdateCategory,
   useDeleteCategory,
 } from './useCategoriesQuery';
+export {
+  useReusableCasesQuery,
+  useReusableCaseQuery,
+} from './useReusableCasesQuery';

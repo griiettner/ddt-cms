@@ -268,4 +268,47 @@ export const testRunsApi = {
   },
 };
 
+export const reusableCasesApi = {
+  list() {
+    return api.get('/reusable-cases');
+  },
+  get(id) {
+    return api.get(`/reusable-cases/${id}`);
+  },
+  create(data) {
+    return api.post('/reusable-cases', data);
+  },
+  update(id, data) {
+    return api.put(`/reusable-cases/${id}`, data);
+  },
+  delete(id) {
+    return api.delete(`/reusable-cases/${id}`);
+  },
+  copyTo(id, data) {
+    return api.post(`/reusable-cases/${id}/copy-to`, data);
+  },
+  createFromCase(data) {
+    return api.post('/reusable-cases/from-case', data);
+  },
+  // Step management
+  listSteps(id) {
+    return api.get(`/reusable-cases/${id}/steps`);
+  },
+  addStep(id, step) {
+    return api.post(`/reusable-cases/${id}/steps`, step);
+  },
+  updateStep(id, stepId, data) {
+    return api.patch(`/reusable-cases/${id}/steps/${stepId}`, data);
+  },
+  deleteStep(id, stepId) {
+    return api.delete(`/reusable-cases/${id}/steps/${stepId}`);
+  },
+  reorderSteps(id, steps) {
+    return api.put(`/reusable-cases/${id}/steps/reorder`, { steps });
+  },
+  syncSteps(id, steps) {
+    return api.put(`/reusable-cases/${id}/steps`, { steps });
+  },
+};
+
 export default api;

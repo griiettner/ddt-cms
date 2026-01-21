@@ -22,6 +22,7 @@ function StepRowView({
   onOpenMatchConfig,
   onOpenTypeConfig,
   onDeleteStep,
+  showConfigButtons = true,
   dragHandleProps,
   isDragging,
 }) {
@@ -64,15 +65,17 @@ function StepRowView({
               <option key={t.key} value={t.key}>{t.display_name}</option>
             ))}
           </select>
-          <button
-            className="pencil-btn"
-            onClick={() => onOpenTypeConfig('type')}
-            title="Edit types"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-            </svg>
-          </button>
+          {showConfigButtons && (
+            <button
+              className="pencil-btn"
+              onClick={() => onOpenTypeConfig('type')}
+              title="Edit types"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          )}
         </div>
       </td>
 
@@ -110,6 +113,7 @@ function StepRowView({
           onFieldChange={onFieldChange}
           onOpenSelectConfig={onOpenSelectConfig}
           onOpenMatchConfig={onOpenMatchConfig}
+          showConfigButtons={showConfigButtons}
         />
       </td>
 

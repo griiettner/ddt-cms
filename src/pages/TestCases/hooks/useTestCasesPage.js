@@ -25,6 +25,8 @@ import {
   useUpdateTypes,
   useSaveSelectConfig,
   useSaveMatchConfig,
+  useCopyReusableCase,
+  useCreateReusableCaseFromCase,
 } from '../../../hooks/mutations';
 import { useRelease } from '../../../context/ReleaseContext';
 import { useTestCasesStore } from '../stores/testCasesStore';
@@ -113,6 +115,8 @@ export function useTestCasesPage() {
   const updateTypesMutation = useUpdateTypes(selectedReleaseId);
   const saveSelectConfigMutation = useSaveSelectConfig();
   const saveMatchConfigMutation = useSaveMatchConfig();
+  const copyReusableCaseMutation = useCopyReusableCase();
+  const createReusableCaseFromCaseMutation = useCreateReusableCaseFromCase();
 
   // Computed values
   const selectedScenario = useMemo(() => {
@@ -147,12 +151,45 @@ export function useTestCasesPage() {
         testSetId,
         name: modals.case.name,
       });
+
       closeCaseModal();
       if (res.data?.scenarioId) {
         handleSelectScenario(res.data.scenarioId);
       }
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  // Handle using a reusable case (copy it to current test set)
+  const handleUseReusableCase = async (reusableCaseId) => {
+    try {
+      const res = await copyReusableCaseMutation.mutateAsync({
+        reusableCaseId,
+        releaseId: selectedReleaseId,
+        testSetId,
+      });
+      closeCaseModal();
+      // Select the newly created scenario if available
+      if (res.data?.scenarioId) {
+        handleSelectScenario(res.data.scenarioId);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Save an existing test case as a reusable case
+  const handleSaveAsReusable = async (caseId, caseName) => {
+    try {
+      const res = await createReusableCaseFromCaseMutation.mutateAsync({
+        caseId,
+        releaseId: selectedReleaseId,
+        name: caseName,
+      });
+      alert(`"${caseName}" has been saved as a reusable case with ${res.data?.stepsCopied || 0} steps.`);
+    } catch (err) {
+      alert(`Failed to save as reusable: ${err.message}`);
     }
   };
 
@@ -507,12 +544,14 @@ export function useTestCasesPage() {
     // Case modal
     handleOpenCaseModal,
     handleSubmitCase,
+    handleUseReusableCase,
     closeCaseModal,
     setCaseModalName,
 
     // Case edit/delete
     handleEditCase,
     handleDeleteCase,
+    handleSaveAsReusable,
     confirmDeleteCase,
     closeDeleteCaseConfirm,
 

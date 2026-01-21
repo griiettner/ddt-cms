@@ -10,7 +10,7 @@ export const testCasesStore = new Store({
   selectedScenarioId: null,
   openCases: new Set(),
   modals: {
-    case: { open: false, name: '' },
+    case: { open: false, name: '', saveAsReusable: false },
     scenario: { open: false, name: '', testCaseId: '' },
     typeConfig: { open: false, category: '', options: '' },
     selectConfig: {
@@ -90,7 +90,7 @@ export const testCasesActions = {
       ...state,
       modals: {
         ...state.modals,
-        case: { open: true, name: '' },
+        case: { open: true, name: '', saveAsReusable: false },
       },
     }));
   },
@@ -100,7 +100,7 @@ export const testCasesActions = {
       ...state,
       modals: {
         ...state.modals,
-        case: { open: false, name: '' },
+        case: { open: false, name: '', saveAsReusable: false },
       },
     }));
   },
@@ -111,6 +111,16 @@ export const testCasesActions = {
       modals: {
         ...state.modals,
         case: { ...state.modals.case, name },
+      },
+    }));
+  },
+
+  setCaseModalSaveAsReusable: (saveAsReusable) => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        case: { ...state.modals.case, saveAsReusable },
       },
     }));
   },
@@ -407,7 +417,7 @@ export const testCasesActions = {
       selectedScenarioId: null,
       openCases: new Set(),
       modals: {
-        case: { open: false, name: '' },
+        case: { open: false, name: '', saveAsReusable: false },
         scenario: { open: false, name: '', testCaseId: '' },
         typeConfig: { open: false, category: '', options: '' },
         selectConfig: {

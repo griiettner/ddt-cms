@@ -49,3 +49,11 @@ export {
   useDeleteMatchConfig,
   useSaveMatchConfig,
 } from './useConfigMutations';
+
+export {
+  useCreateReusableCase,
+  useUpdateReusableCase,
+  useDeleteReusableCase,
+  useCopyReusableCase,
+  useCreateReusableCaseFromCase,
+} from './useReusableCasesMutations';

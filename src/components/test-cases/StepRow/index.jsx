@@ -19,6 +19,7 @@ function StepRow({
   onOpenMatchConfig,
   onOpenTypeConfig,
   onDeleteStep,
+  showConfigButtons = true,
 }) {
   const {
     localValues,
@@ -64,6 +65,7 @@ function StepRow({
         onOpenMatchConfig={onOpenMatchConfig}
         onOpenTypeConfig={onOpenTypeConfig}
         onDeleteStep={onDeleteStep}
+        showConfigButtons={showConfigButtons}
         dragHandleProps={{ ...attributes, ...listeners }}
         isDragging={isDragging}
       />

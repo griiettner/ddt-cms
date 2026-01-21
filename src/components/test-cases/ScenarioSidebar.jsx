@@ -13,6 +13,12 @@ const TrashIcon = ({ className }) => (
   </svg>
 );
 
+const BookmarkIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+  </svg>
+);
+
 /**
  * ScenarioSidebar - Displays the scenario list grouped by test case
  */
@@ -26,6 +32,7 @@ function ScenarioSidebar({
   onAddScenario,
   onEditCase,
   onDeleteCase,
+  onSaveAsReusable,
 }) {
   const [editingCaseId, setEditingCaseId] = useState(null);
   const [editCaseName, setEditCaseName] = useState('');
@@ -65,6 +72,13 @@ function ScenarioSidebar({
     e.stopPropagation();
     if (onDeleteCase) {
       onDeleteCase(caseId, caseName);
+    }
+  };
+
+  const handleSaveAsReusable = (e, caseId, caseName) => {
+    e.stopPropagation();
+    if (onSaveAsReusable) {
+      onSaveAsReusable(caseId, caseName);
     }
   };
 
@@ -113,6 +127,13 @@ function ScenarioSidebar({
                 <>
                   <span className="case-title flex-1">{caseData.name}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+                    <button
+                      onClick={(e) => handleSaveAsReusable(e, parseInt(caseId), caseData.name)}
+                      className="p-1 hover:bg-co-blue/10 rounded"
+                      title="Save as reusable case"
+                    >
+                      <BookmarkIcon className="w-3.5 h-3.5 text-co-blue" />
+                    </button>
                     <button
                       onClick={(e) => startEditingCase(e, parseInt(caseId), caseData.name)}
                       className="p-1 hover:bg-co-gray-200 rounded"
