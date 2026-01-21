@@ -153,9 +153,9 @@ router.post(
         return;
       }
 
-      // Find the latest open release to copy data from
+      // Find the latest release to copy data from (regardless of status)
       const latestRelease = db
-        .prepare("SELECT id FROM releases WHERE status = 'open' ORDER BY created_at DESC LIMIT 1")
+        .prepare('SELECT id FROM releases ORDER BY created_at DESC LIMIT 1')
         .get() as ReleaseRow | undefined;
 
       // Insert the new release
