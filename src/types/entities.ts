@@ -205,3 +205,23 @@ export interface User {
   name?: string;
   email?: string;
 }
+
+// Audit Log Types
+export interface AuditLog {
+  id: number;
+  timestamp: string;
+  user_eid: string;
+  user_name: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: number | null;
+  resource_name: string | null;
+  release_id: number | null;
+  details: Record<string, unknown> | null;
+}
+
+export interface AuditLogFilters {
+  users: { eid: string; name: string | null }[];
+  actions: string[];
+  resourceTypes: string[];
+}

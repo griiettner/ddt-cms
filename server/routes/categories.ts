@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getRegistryDb } from '../db/database.js';
 import type { CategoryRow, CountResult, DatabaseInstance } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -221,6 +222,14 @@ router.post('/', (req: Request<object, unknown, CreateCategoryBody>, res: Respon
       .prepare('SELECT * FROM categories WHERE id = ?')
       .get(result.lastInsertRowid) as CategoryRow;
 
+    logAudit({
+      req,
+      action: 'CREATE',
+      resourceType: 'category',
+      resourceId: result.lastInsertRowid as number,
+      resourceName: name,
+    });
+
     res.json({ success: true, data: category });
   } catch (err) {
     const error = err as Error;
@@ -320,6 +329,15 @@ router.patch(
       rebuildNestedSet(db);
 
       const updated = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as CategoryRow;
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'category',
+        resourceId: parseInt(id),
+        resourceName: updated?.name,
+      });
+
       res.json({ success: true, data: updated });
     } catch (err) {
       const error = err as Error;
@@ -365,6 +383,14 @@ router.delete('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
 
     // Rebuild nested set values
     rebuildNestedSet(db);
+
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'category',
+      resourceId: parseInt(id),
+      resourceName: category.name,
+    });
 
     res.json({ success: true });
   } catch (err) {

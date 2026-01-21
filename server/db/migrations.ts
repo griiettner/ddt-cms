@@ -223,6 +223,32 @@ export const initSchema = (): void => {
 
     CREATE INDEX IF NOT EXISTS idx_config_category ON configuration_options(category, is_active);
     CREATE INDEX IF NOT EXISTS idx_config_release ON configuration_options(release_id);
+
+    -- ================================
+    -- Audit Logs Table
+    -- ================================
+
+    -- Audit logs for tracking user actions
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      user_eid VARCHAR(255) NOT NULL,
+      user_name VARCHAR(255),
+      action VARCHAR(50) NOT NULL,
+      resource_type VARCHAR(100) NOT NULL,
+      resource_id INTEGER,
+      resource_name VARCHAR(255),
+      release_id INTEGER,
+      details TEXT,
+      ip_address VARCHAR(45),
+      user_agent TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_eid);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_release ON audit_logs(release_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
   `);
 
   // Run migrations to ensure schema is up to date

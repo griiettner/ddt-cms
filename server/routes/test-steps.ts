@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
 import type { TestStepRow } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -86,6 +87,14 @@ router.patch(
       const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ? AND release_id = ?`);
       stmt.run(...values, id, releaseId);
 
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_step',
+        resourceId: parseInt(id),
+        releaseId: releaseId,
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -129,6 +138,14 @@ router.delete('/:releaseId/:id', (req: Request<StepIdParams>, res: Response): vo
       `
       ).run(step.test_scenario_id, step.order_index, releaseId);
     })();
+
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'test_step',
+      resourceId: parseInt(id),
+      releaseId: releaseId,
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -180,6 +197,15 @@ router.post(
           );
         });
       })();
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_steps',
+        releaseId: releaseId,
+        details: { scenarioId, stepCount: steps.length },
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;

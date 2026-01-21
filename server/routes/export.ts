@@ -11,6 +11,7 @@ import type {
   ApiSuccessResponse,
   ApiErrorResponse,
 } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -150,6 +151,16 @@ router.get(
           };
         }),
       };
+
+      logAudit({
+        req,
+        action: 'EXPORT',
+        resourceType: 'release',
+        resourceId: parseInt(releaseId),
+        resourceName: release.release_number,
+        releaseId: releaseId,
+        details: { testSetCount: testSets.length },
+      });
 
       res.json({ success: true, data: exportData });
     } catch (err) {

@@ -229,3 +229,19 @@ export interface ActionConfig {
   name: string;
   result_type: string | null;
 }
+
+// Audit Log types
+export interface AuditLogRow {
+  id: number;
+  timestamp: string;
+  user_eid: string;
+  user_name: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: number | null;
+  resource_name: string | null;
+  release_id: number | null;
+  details: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+}

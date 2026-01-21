@@ -8,6 +8,7 @@ import type {
   TotalResult,
   CountResult,
 } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -169,6 +170,16 @@ router.post(
       const result = stmt.run(releaseId, name, description || '', category_id || null, user);
 
       const category = getCategoryInfo(category_id);
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'test_set',
+        resourceId: result.lastInsertRowid as number,
+        resourceName: name,
+        releaseId: releaseId,
+      });
+
       res.json({ success: true, data: { id: result.lastInsertRowid, name, category } });
     } catch (err) {
       const error = err as Error;
@@ -237,6 +248,16 @@ router.patch(
         | TestSetRow
         | undefined;
       const category = getCategoryInfo(updated?.category_id);
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_set',
+        resourceId: parseInt(req.params.id),
+        resourceName: updated?.name,
+        releaseId: req.params.releaseId,
+      });
+
       res.json({ success: true, data: { ...updated, category } });
     } catch (err) {
       const error = err as Error;
@@ -249,10 +270,26 @@ router.patch(
 router.delete('/:releaseId/:id', (req: Request<TestSetIdParams>, res: Response): void => {
   try {
     const db = getDb();
+
+    // Get test set name before deleting for audit log
+    const testSet = db
+      .prepare('SELECT name FROM test_sets WHERE id = ? AND release_id = ?')
+      .get(req.params.id, req.params.releaseId) as { name: string } | undefined;
+
     db.prepare('DELETE FROM test_sets WHERE id = ? AND release_id = ?').run(
       req.params.id,
       req.params.releaseId
     );
+
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'test_set',
+      resourceId: parseInt(req.params.id),
+      resourceName: testSet?.name,
+      releaseId: req.params.releaseId,
+    });
+
     res.json({ success: true });
   } catch (err) {
     const error = err as Error;

@@ -133,6 +133,14 @@ export const queryKeys = {
     list: () => ['reusableCases', 'list'] as const,
     detail: (id: number) => ['reusableCases', 'detail', id] as const,
   },
+
+  // Audit Logs queries (global)
+  auditLogs: {
+    all: ['auditLogs'] as const,
+    list: (filters?: Record<string, unknown>, page?: number) =>
+      ['auditLogs', 'list', filters, page] as const,
+    filters: () => ['auditLogs', 'filters'] as const,
+  },
 };
 
 export default queryKeys;

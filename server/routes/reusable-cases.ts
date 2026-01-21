@@ -14,6 +14,7 @@ import type {
   MaxOrderResult,
   ApiResponse,
 } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -234,6 +235,15 @@ router.post(
         });
       }
 
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'reusable_case',
+        resourceId: reusableCaseId as number,
+        resourceName: name,
+        details: { stepCount: steps?.length || 0 },
+      });
+
       res.json({
         success: true,
         data: { id: reusableCaseId, name },
@@ -275,6 +285,14 @@ router.put(
       `
       ).run(name, description || '', id);
 
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'reusable_case',
+        resourceId: parseInt(id),
+        resourceName: name,
+      });
+
       res.json({ success: true, data: undefined });
     } catch (err) {
       const error = err as Error;
@@ -291,8 +309,8 @@ router.delete('/:id', (req: Request<IdParams>, res: Response<ApiResponse<undefin
   try {
     const db = getDb();
 
-    const existing = db.prepare('SELECT id FROM reusable_cases WHERE id = ?').get(id) as
-      | IdResult
+    const existing = db.prepare('SELECT id, name FROM reusable_cases WHERE id = ?').get(id) as
+      | { id: number; name: string }
       | undefined;
     if (!existing) {
       res.status(404).json({ success: false, error: 'Reusable case not found' });
@@ -301,6 +319,14 @@ router.delete('/:id', (req: Request<IdParams>, res: Response<ApiResponse<undefin
 
     // Steps are deleted automatically via CASCADE
     db.prepare('DELETE FROM reusable_cases WHERE id = ?').run(id);
+
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'reusable_case',
+      resourceId: parseInt(id),
+      resourceName: existing.name,
+    });
 
     res.json({ success: true, data: undefined });
   } catch (err) {
@@ -424,6 +450,16 @@ router.post(
         });
       }
 
+      logAudit({
+        req,
+        action: 'COPY',
+        resourceType: 'reusable_case',
+        resourceId: parseInt(id),
+        resourceName: reusableCase.name,
+        releaseId: releaseId,
+        details: { targetTestSetId: testSetId, stepsCopied: steps.length },
+      });
+
       res.json({
         success: true,
         data: {
@@ -538,6 +574,16 @@ router.post(
           );
         });
       }
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'reusable_case',
+        resourceId: reusableCaseId as number,
+        resourceName: reusableName,
+        releaseId: releaseId,
+        details: { fromCaseId: caseId, stepsCopied: allSteps.length },
+      });
 
       res.json({
         success: true,

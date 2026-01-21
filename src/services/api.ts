@@ -334,6 +334,32 @@ export const testRunsApi = {
   },
 };
 
+export interface AuditLogsListParams {
+  page?: number;
+  limit?: number;
+  user_eid?: string;
+  action?: string;
+  resource_type?: string;
+  release_id?: string;
+  start_date?: string;
+  end_date?: string;
+  search?: string;
+}
+
+export const auditLogsApi = {
+  list(params: AuditLogsListParams = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== '')
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return api.get(`/audit-logs${query ? `?${query}` : ''}`);
+  },
+  getFilters() {
+    return api.get('/audit-logs/filters');
+  },
+};
+
 export const reusableCasesApi = {
   list(): Promise<ReusableCasesResponse> {
     return api.get('/reusable-cases') as Promise<ReusableCasesResponse>;

@@ -28,6 +28,7 @@ import TestCases from '@/pages/TestCases';
 import TestRuns from '@/pages/TestRuns';
 import Settings from '@/pages/Settings';
 import ReusableCaseEditor from '@/pages/ReusableCaseEditor';
+import AuditLogs from '@/pages/AuditLogs';
 import NotFound from '@/pages/NotFound';
 
 // Root layout component
@@ -125,6 +126,13 @@ const reusableCaseEditorRoute = createRoute({
   component: ReusableCaseEditor,
 });
 
+// Audit Logs route (global, not release-specific)
+const auditLogsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/audit-logs',
+  component: AuditLogs,
+});
+
 // 404 route
 const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -151,6 +159,7 @@ const routeTree = rootRoute.addChildren([
   testRunsRoute,
   settingsRoute,
   reusableCaseEditorRoute,
+  auditLogsRoute,
   notFoundRoute,
   catchAllRoute,
 ]);

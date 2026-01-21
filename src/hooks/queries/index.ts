@@ -23,3 +23,4 @@ export {
   useDeleteCategory,
 } from './useCategoriesQuery';
 export { useReusableCasesQuery, useReusableCaseQuery } from './useReusableCasesQuery';
+export { useAuditLogsQuery, useAuditLogsFiltersQuery } from './useAuditLogsQuery';

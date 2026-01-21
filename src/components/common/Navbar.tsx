@@ -2,7 +2,7 @@ import { Link, useRouterState, useParams } from '@tanstack/react-router';
 import { useAuth } from '@/context/AuthContext';
 import logo from '@/assets/images/logo.png';
 
-type NavKey = 'dashboard' | 'releases' | 'test-sets' | 'test-runs' | 'settings';
+type NavKey = 'dashboard' | 'releases' | 'test-sets' | 'test-runs' | 'settings' | 'audit-logs';
 
 function Navbar(): JSX.Element {
   const { user } = useAuth();
@@ -28,6 +28,7 @@ function Navbar(): JSX.Element {
     if (key === 'test-sets') return pathname.includes('/test-sets');
     if (key === 'test-runs') return pathname.includes('/test-runs');
     if (key === 'settings') return pathname.includes('/settings');
+    if (key === 'audit-logs') return pathname === '/audit-logs';
     return false;
   };
 
@@ -97,6 +98,10 @@ function Navbar(): JSX.Element {
           ) : (
             <span className={disabledClass}>Settings</span>
           )}
+
+          <Link to="/audit-logs" className={getNavLinkClass('audit-logs')}>
+            Audit Logs
+          </Link>
         </div>
       </div>
       <div className="flex items-center gap-4">

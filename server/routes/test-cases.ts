@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
 import type { TestCaseRow, TestScenarioRow } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -133,6 +134,15 @@ router.post(
         order_index || 0
       );
 
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'test_case',
+        resourceId: caseId as number,
+        resourceName: name,
+        releaseId: releaseId,
+      });
+
       res.json({
         success: true,
         data: { id: caseId, scenarioId, test_set_id: testSetId, name, description, order_index },
@@ -174,6 +184,16 @@ router.patch(
       db.prepare(`UPDATE test_cases SET ${updates.join(', ')} WHERE id = ? AND release_id = ?`).run(
         ...params
       );
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_case',
+        resourceId: parseInt(id),
+        resourceName: name,
+        releaseId: releaseId,
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -241,6 +261,15 @@ router.delete('/:releaseId/:id', (req: Request<TestCaseIdParams>, res: Response)
       console.log(`[DELETE] Warning: No rows deleted for test case ${id}`);
     }
 
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'test_case',
+      resourceId: parseInt(id),
+      resourceName: existingCase.name,
+      releaseId: releaseId,
+    });
+
     res.json({ success: true, deleted: result > 0 });
   } catch (err) {
     const error = err as Error;
@@ -284,6 +313,16 @@ router.post(
         'INSERT INTO test_scenarios (release_id, test_case_id, name, description) VALUES (?, ?, ?, ?)'
       );
       const result = stmt.run(releaseId, testCaseId, name, description || '');
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'test_scenario',
+        resourceId: result.lastInsertRowid as number,
+        resourceName: name,
+        releaseId: releaseId,
+      });
+
       res.json({ success: true, data: { id: result.lastInsertRowid } });
     } catch (err) {
       const error = err as Error;
@@ -338,6 +377,15 @@ router.patch(
         `UPDATE test_scenarios SET ${fields} WHERE id = ? AND release_id = ?`
       );
       stmt.run(...values, id, releaseId);
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_scenario',
+        resourceId: parseInt(id),
+        releaseId: releaseId,
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -353,6 +401,12 @@ router.delete(
     const { releaseId, id } = req.params;
     try {
       const db = getDb();
+
+      // Get scenario name before deleting for audit log
+      const scenario = db
+        .prepare('SELECT name FROM test_scenarios WHERE id = ? AND release_id = ?')
+        .get(id, releaseId) as { name: string } | undefined;
+
       db.transaction(() => {
         // Delete steps first
         db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ? AND release_id = ?').run(
@@ -362,6 +416,16 @@ router.delete(
         // Delete scenario
         db.prepare('DELETE FROM test_scenarios WHERE id = ? AND release_id = ?').run(id, releaseId);
       })();
+
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'test_scenario',
+        resourceId: parseInt(id),
+        resourceName: scenario?.name,
+        releaseId: releaseId,
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;

@@ -8,6 +8,7 @@ import type {
   CountResult,
   PaginatedApiResponse,
 } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -171,6 +172,14 @@ router.post(
         // Seed default configuration options for the new release
         seedDefaultConfig(db, newReleaseId as number);
       }
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'release',
+        resourceId: newReleaseId as number,
+        resourceName: release_number,
+      });
 
       res.json({ success: true, data: { id: newReleaseId, release_number } });
     } catch (err) {
@@ -459,6 +468,21 @@ router.patch(
       params.push(req.params.id);
 
       db.prepare(query).run(...params);
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'release',
+        resourceId: parseInt(req.params.id),
+        resourceName: release_number,
+        details: {
+          fields: Object.keys({ release_number, description, notes }).filter(
+            (k) =>
+              (({ release_number, description, notes }) as Record<string, unknown>)[k] !== undefined
+          ),
+        },
+      });
+
       res.json({ success: true });
     } catch (err) {
       const error = err as Error;
@@ -475,6 +499,15 @@ router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void =>
     db.prepare(
       "UPDATE releases SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE id = ?"
     ).run(authReq.user.eid, req.params.id);
+
+    logAudit({
+      req,
+      action: 'UPDATE',
+      resourceType: 'release',
+      resourceId: parseInt(req.params.id),
+      details: { status: 'closed' },
+    });
+
     res.json({ success: true });
   } catch (err) {
     const error = err as Error;
@@ -488,6 +521,15 @@ router.put('/:id/reopen', (req: Request<ReleaseIdParams>, res: Response): void =
     db.prepare(
       "UPDATE releases SET status = 'open', closed_at = NULL, closed_by = NULL WHERE id = ?"
     ).run(req.params.id);
+
+    logAudit({
+      req,
+      action: 'UPDATE',
+      resourceType: 'release',
+      resourceId: parseInt(req.params.id),
+      details: { status: 'open' },
+    });
+
     res.json({ success: true });
   } catch (err) {
     const error = err as Error;
@@ -499,6 +541,15 @@ router.put('/:id/archive', (req: Request<ReleaseIdParams>, res: Response): void 
   try {
     const db = getDb();
     db.prepare("UPDATE releases SET status = 'archived' WHERE id = ?").run(req.params.id);
+
+    logAudit({
+      req,
+      action: 'UPDATE',
+      resourceType: 'release',
+      resourceId: parseInt(req.params.id),
+      details: { status: 'archived' },
+    });
+
     res.json({ success: true });
   } catch (err) {
     const error = err as Error;
@@ -530,6 +581,14 @@ router.delete('/:id', (req: Request<ReleaseIdParams>, res: Response): void => {
     // - configuration_options
     // - test_runs
     db.prepare('DELETE FROM releases WHERE id = ?').run(req.params.id);
+
+    logAudit({
+      req,
+      action: 'DELETE',
+      resourceType: 'release',
+      resourceId: parseInt(req.params.id),
+      resourceName: release.status,
+    });
 
     res.json({ success: true });
   } catch (err) {

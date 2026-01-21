@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
 import type { ConfigOptionRow, MaxOrderResult, ApiResponse } from '../types/index.js';
+import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
 
@@ -123,6 +124,14 @@ router.post(
         orderIndex
       );
 
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: `config_${category}`,
+        resourceName: display_name,
+        releaseId: releaseId,
+      });
+
       res.json({ success: true, data: undefined });
     } catch (err) {
       const error = err as Error;
@@ -162,6 +171,14 @@ router.post(
         });
       })();
 
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: `config_${category}`,
+        releaseId: releaseId,
+        details: { optionCount: options.length },
+      });
+
       res.json({ success: true, data: undefined });
     } catch (err) {
       const error = err as Error;
@@ -176,7 +193,23 @@ router.delete(
   (req: Request<DeleteParams>, res: Response<ApiResponse<undefined>>): void => {
     try {
       const db = getDb();
+
+      // Get config option info before deleting
+      const config = db
+        .prepare('SELECT display_name, category FROM configuration_options WHERE id = ?')
+        .get(req.params.id) as { display_name: string; category: string } | undefined;
+
       db.prepare('DELETE FROM configuration_options WHERE id = ?').run(req.params.id);
+
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: `config_${config?.category || 'option'}`,
+        resourceId: parseInt(req.params.id),
+        resourceName: config?.display_name,
+        releaseId: req.params.releaseId,
+      });
+
       res.json({ success: true, data: undefined });
     } catch (err) {
       const error = err as Error;
