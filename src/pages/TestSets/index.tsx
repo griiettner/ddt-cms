@@ -104,7 +104,7 @@ function TestSets(): JSX.Element {
                 <label className="form-label text-xs">Categories</label>
                 <select
                   multiple
-                  className="form-input h-[38px]"
+                  className="form-input h-[50px]"
                   value={filters.category_ids.map(String)}
                   onChange={(e) => {
                     const selected = Array.from(e.target.selectedOptions, (opt) =>

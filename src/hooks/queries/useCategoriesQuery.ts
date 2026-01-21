@@ -32,18 +32,14 @@ export function useCategoriesQuery(enabled = true) {
 
 /**
  * Fetch all categories flat (for dropdowns)
+ * The backend already provides displayName with proper indentation
  */
 export function useCategoriesFlatQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.categories.flat(),
     queryFn: async (): Promise<FlatCategory[]> => {
       const res = await categoriesApi.listFlat();
-      const categories = res.data ?? [];
-      // Add displayName computed from path for dropdown display
-      return categories.map((cat) => ({
-        ...cat,
-        displayName: cat.path.replace(/\//g, ' > '),
-      }));
+      return (res.data ?? []) as FlatCategory[];
     },
     staleTime: 60 * 1000,
     enabled,
