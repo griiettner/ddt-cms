@@ -17,6 +17,7 @@ export const ACTION_TYPES: ActionType[] = [
   { key: 'click', label: 'Click' },
   { key: 'custom_select', label: 'Custom Select' },
   { key: 'options_match', label: 'Options Match' },
+  { key: 'password', label: 'Password' },
   { key: 'text_match', label: 'Text Match' },
   { key: 'text_plain', label: 'Text Plain' },
   { key: 'url', label: 'URL' },
@@ -31,6 +32,7 @@ export interface ResultType {
 export const RESULT_TYPES: ResultType[] = [
   { key: '', label: 'None' },
   { key: 'text', label: 'Text' },
+  { key: 'password', label: 'Password' },
   { key: 'checkbox', label: 'Checkbox' },
   { key: 'select', label: 'Select' },
   { key: 'array', label: 'Array' },

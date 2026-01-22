@@ -121,6 +121,7 @@ export type ActionType =
   | 'click'
   | 'custom_select'
   | 'options_match'
+  | 'password'
   | 'text_match'
   | 'text_plain'
   | 'url'

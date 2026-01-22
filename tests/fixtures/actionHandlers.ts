@@ -226,6 +226,18 @@ const handleTextPlain: ActionHandler = async (context) => {
 };
 
 /**
+ * Password Action Handler
+ * Types password into a password input field (same as text_plain but for password fields)
+ */
+const handlePassword: ActionHandler = async (context) => {
+  const { step } = context;
+  const locator = getLocator(context);
+  const password = getActionResult(step);
+
+  await locator.fill(password);
+};
+
+/**
  * URL Action Handler
  * Navigates to URL, clicks element to trigger navigation, or verifies current URL
  */
@@ -301,6 +313,7 @@ export const actionHandlers: Record<ActionType, ActionHandler> = {
   click: handleClick,
   custom_select: handleCustomSelect,
   options_match: handleOptionsMatch,
+  password: handlePassword,
   text_match: handleTextMatch,
   text_plain: handleTextPlain,
   url: handleUrl,

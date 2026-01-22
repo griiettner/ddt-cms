@@ -87,6 +87,18 @@ function ActionResultCell({
         />
       );
 
+    case 'password':
+      return (
+        <input
+          type="password"
+          className="cell-input"
+          defaultValue={step.action_result || ''}
+          onBlur={handleTextBlur}
+          onKeyDown={handleKeyDown}
+          placeholder="••••••••"
+        />
+      );
+
     case 'click':
       return <input className="cell-input cursor-not-allowed bg-co-gray-50" disabled value="N/A" />;
 

@@ -203,6 +203,13 @@ export function useTestSetsPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Guard against invalid release ID (race condition when releases haven't loaded)
+    if (!selectedReleaseId || Number(selectedReleaseId) === 0) {
+      alert('Please wait for the release to load or refresh the page.');
+      return;
+    }
+
     try {
       if (editingTestSet) {
         await updateMutation.mutateAsync({ id: editingTestSet.id, data: form });
