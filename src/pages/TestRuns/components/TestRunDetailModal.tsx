@@ -100,6 +100,16 @@ function TestRunDetailModal({ isOpen, onClose, run }: TestRunDetailModalProps): 
                 </span>
               </div>
               <div>
+                <span className="text-co-gray-500">Environment:</span>
+                {run.environment ? (
+                  <span className="bg-co-blue-50 ml-2 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                    {run.environment}
+                  </span>
+                ) : (
+                  <span className="text-co-gray-400 ml-2">-</span>
+                )}
+              </div>
+              <div>
                 <span className="text-co-gray-500">Duration:</span>
                 <span className="ml-2 font-medium text-co-gray-700">
                   {formatDuration(run.duration_ms)}
@@ -113,6 +123,12 @@ function TestRunDetailModal({ isOpen, onClose, run }: TestRunDetailModalProps): 
                 <span className="text-co-gray-500">Executed By:</span>
                 <span className="ml-2 text-co-gray-700">{run.executed_by || 'System'}</span>
               </div>
+              {run.base_url && (
+                <div>
+                  <span className="text-co-gray-500">Base URL:</span>
+                  <span className="ml-2 font-mono text-xs text-co-gray-700">{run.base_url}</span>
+                </div>
+              )}
             </div>
           </div>
 

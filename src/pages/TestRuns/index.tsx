@@ -1,11 +1,16 @@
 /**
  * TestRuns Page
- * Shows the complete test run history for a release with pagination
+ * Shows the complete test run history for a release with pagination and filters
  */
 import { Link, useParams } from '@tanstack/react-router';
 import { LoadingSpinner } from '@/components/common';
 import { useTestRunsPage } from './hooks/useTestRunsPage';
-import { TestRunsTable, TestRunDetailModal, TestRunReportModal } from './components';
+import {
+  TestRunsTable,
+  TestRunDetailModal,
+  TestRunReportModal,
+  TestRunsFilters,
+} from './components';
 
 function TestRuns(): JSX.Element {
   const { releaseId: releaseSlug } = useParams({ strict: false }) as { releaseId?: string };
@@ -25,6 +30,13 @@ function TestRuns(): JSX.Element {
     isReportModalOpen,
     openReportModal,
     closeReportModal,
+    // Filters
+    filters,
+    filterOptions,
+    isFilterOptionsLoading,
+    updateFilter,
+    applyFilters,
+    resetFilters,
     // Pagination
     pagination,
     goToPage,
@@ -91,6 +103,16 @@ function TestRuns(): JSX.Element {
           <div className="text-sm text-co-gray-500">Steps (this page)</div>
         </div>
       </div>
+
+      {/* Filters */}
+      <TestRunsFilters
+        filters={filters}
+        onFilterChange={updateFilter}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        filterOptions={filterOptions}
+        isLoading={isFilterOptionsLoading}
+      />
 
       {/* Content */}
       {isLoading ? (

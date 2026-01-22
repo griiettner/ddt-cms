@@ -197,6 +197,8 @@ export interface TestRun {
   failed_steps: number;
   failed_details: FailedDetail[];
   release_number?: string;
+  environment: string | null;
+  base_url: string | null;
 }
 
 // User Types

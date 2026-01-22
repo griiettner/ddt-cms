@@ -133,10 +133,12 @@ function TestRunsTable({
             <tr>
               <th>ID</th>
               <th>Test Set</th>
+              <th>Environment</th>
               <th>Status</th>
               <th>Scenarios</th>
               <th>Results</th>
               <th>Duration</th>
+              <th>Run By</th>
               <th>Date</th>
               <th></th>
             </tr>
@@ -147,6 +149,15 @@ function TestRunsTable({
                 <td className="text-sm text-co-gray-500">#{run.id}</td>
                 <td className="font-medium text-co-gray-900">
                   {run.test_set_name || `Test Set #${run.test_set_id}` || 'All Tests'}
+                </td>
+                <td>
+                  {run.environment ? (
+                    <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                      {run.environment}
+                    </span>
+                  ) : (
+                    <span className="text-co-gray-400">-</span>
+                  )}
                 </td>
                 <td>
                   <span
@@ -171,6 +182,7 @@ function TestRunsTable({
                   )}
                 </td>
                 <td className="text-sm text-co-gray-500">{formatDuration(run.duration_ms)}</td>
+                <td className="text-sm text-co-gray-600">{run.executed_by || '-'}</td>
                 <td className="text-sm text-co-gray-500">{formatDate(run.executed_at)}</td>
                 <td>
                   <div className="flex items-center gap-3">

@@ -123,8 +123,10 @@ export const queryKeys = {
   // Test Runs queries
   testRuns: {
     all: ['testRuns'] as const,
-    list: (releaseId?: number) => ['testRuns', releaseId, 'list'] as const,
+    list: (releaseId?: number, filters?: Record<string, unknown>) =>
+      ['testRuns', releaseId, 'list', filters] as const,
     detail: (id: number) => ['testRuns', 'detail', id] as const,
+    filterOptions: (releaseId?: number) => ['testRuns', releaseId, 'filterOptions'] as const,
   },
 
   // Reusable Cases queries (global)

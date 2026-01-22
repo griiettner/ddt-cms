@@ -20,6 +20,13 @@ interface ListTestRunsQuery {
   releaseId?: string;
   page?: string;
   pageSize?: string;
+  status?: string;
+  executedBy?: string;
+  startDate?: string;
+  endDate?: string;
+  testSetId?: string;
+  testSetName?: string;
+  environment?: string;
 }
 
 // Request body types
@@ -74,14 +81,25 @@ interface CreateTestRunResponse {
   id: number | bigint;
 }
 
-// GET /api/test-runs - List test runs with pagination (optionally filter by releaseId)
+// GET /api/test-runs - List test runs with pagination and filters
 router.get(
   '/',
   (
     req: Request<unknown, unknown, unknown, ListTestRunsQuery>,
     res: Response<TestRunsListResponse | { success: false; error: string }>
   ): void => {
-    const { releaseId, page = '1', pageSize = '10' } = req.query;
+    const {
+      releaseId,
+      page = '1',
+      pageSize = '10',
+      status,
+      executedBy,
+      startDate,
+      endDate,
+      testSetId,
+      testSetName,
+      environment,
+    } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10));
     const limit = Math.min(100, Math.max(1, parseInt(pageSize, 10)));
     const offset = (pageNum - 1) * limit;
@@ -89,16 +107,63 @@ router.get(
     try {
       const db = getRegistryDb();
 
-      // Build WHERE clause
-      let whereClause = '';
-      const countParams: string[] = [];
+      // Build WHERE clauses
+      const conditions: string[] = [];
+      const countParams: (string | number)[] = [];
       const queryParams: (string | number)[] = [];
 
       if (releaseId) {
-        whereClause = ' WHERE tr.release_id = ?';
+        conditions.push('tr.release_id = ?');
         countParams.push(releaseId);
         queryParams.push(releaseId);
       }
+
+      if (status) {
+        conditions.push('tr.status = ?');
+        countParams.push(status);
+        queryParams.push(status);
+      }
+
+      if (executedBy) {
+        conditions.push('tr.executed_by LIKE ?');
+        const searchTerm = `%${executedBy}%`;
+        countParams.push(searchTerm);
+        queryParams.push(searchTerm);
+      }
+
+      if (startDate) {
+        conditions.push('tr.executed_at >= ?');
+        countParams.push(startDate);
+        queryParams.push(startDate);
+      }
+
+      if (endDate) {
+        // Add one day to include the end date
+        conditions.push("tr.executed_at < date(?, '+1 day')");
+        countParams.push(endDate);
+        queryParams.push(endDate);
+      }
+
+      if (testSetId) {
+        conditions.push('tr.test_set_id = ?');
+        countParams.push(testSetId);
+        queryParams.push(testSetId);
+      }
+
+      if (testSetName) {
+        conditions.push('tr.test_set_name LIKE ?');
+        const searchTerm = `%${testSetName}%`;
+        countParams.push(searchTerm);
+        queryParams.push(searchTerm);
+      }
+
+      if (environment) {
+        conditions.push('tr.environment = ?');
+        countParams.push(environment);
+        queryParams.push(environment);
+      }
+
+      const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
 
       // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM test_runs tr${whereClause}`;
@@ -135,6 +200,70 @@ router.get(
           pageSize: limit,
           total,
           totalPages: Math.ceil(total / limit),
+        },
+      });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// Filter options response type
+interface FilterOptionsResponse {
+  environments: string[];
+  executedBy: string[];
+  testSets: { id: number; name: string }[];
+}
+
+// GET /api/test-runs/filter-options - Get unique values for filters
+router.get(
+  '/filter-options',
+  (
+    req: Request<unknown, unknown, unknown, { releaseId?: string }>,
+    res: Response<ApiResponse<FilterOptionsResponse>>
+  ): void => {
+    const { releaseId } = req.query;
+
+    try {
+      const db = getRegistryDb();
+
+      const whereClause = releaseId ? ' WHERE release_id = ?' : '';
+      const params = releaseId ? [releaseId] : [];
+
+      // Get distinct environments
+      const environments = db
+        .prepare(
+          `SELECT DISTINCT environment FROM test_runs${whereClause} AND environment IS NOT NULL ORDER BY environment`
+            .replace('AND', releaseId ? 'AND' : 'WHERE')
+            .replace(' WHERE AND', ' WHERE')
+        )
+        .all(...params) as { environment: string }[];
+
+      // Get distinct executed_by values
+      const executedBy = db
+        .prepare(
+          `SELECT DISTINCT executed_by FROM test_runs${whereClause} AND executed_by IS NOT NULL ORDER BY executed_by`
+            .replace('AND', releaseId ? 'AND' : 'WHERE')
+            .replace(' WHERE AND', ' WHERE')
+        )
+        .all(...params) as { executed_by: string }[];
+
+      // Get distinct test sets with their IDs
+      const testSets = db
+        .prepare(
+          `SELECT DISTINCT test_set_id, test_set_name FROM test_runs${whereClause} AND test_set_id IS NOT NULL ORDER BY test_set_name`
+            .replace('AND', releaseId ? 'AND' : 'WHERE')
+            .replace(' WHERE AND', ' WHERE')
+        )
+        .all(...params) as { test_set_id: number; test_set_name: string }[];
+
+      res.json({
+        success: true,
+        data: {
+          environments: environments.map((e) => e.environment),
+          executedBy: executedBy.map((e) => e.executed_by),
+          testSets: testSets.map((ts) => ({ id: ts.test_set_id, name: ts.test_set_name })),
         },
       });
     } catch (err) {

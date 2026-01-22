@@ -127,9 +127,16 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
         {/* Summary Header */}
         <div className="rounded-lg bg-co-gray-50 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="font-semibold text-co-blue">
-              {run.test_set_name || `Test Set #${run.test_set_id}`}
-            </h4>
+            <div className="flex items-center gap-3">
+              <h4 className="font-semibold text-co-blue">
+                {run.test_set_name || `Test Set #${run.test_set_id}`}
+              </h4>
+              {run.environment && (
+                <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                  {run.environment}
+                </span>
+              )}
+            </div>
             <span
               className={`rounded-full px-3 py-1 text-sm font-semibold ${
                 run.status === 'passed'
@@ -152,20 +159,29 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
               <span className="ml-2">{formatDate(run.executed_at)}</span>
             </div>
             <div>
+              <span className="text-co-gray-500">Run By:</span>
+              <span className="ml-2">{run.executed_by || 'System'}</span>
+            </div>
+            <div>
               <span className="text-co-gray-500">Total Steps:</span>
               <span className="ml-2 font-medium">{run.total_steps || 0}</span>
             </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
             <div>
               <span className="text-green-600">Passed:</span>
               <span className="ml-2 font-medium text-green-600">{run.passed_steps || 0}</span>
-              {run.failed_steps > 0 && (
-                <>
-                  <span className="text-co-gray-400 mx-1">/</span>
-                  <span className="text-red-600">Failed:</span>
-                  <span className="ml-1 font-medium text-red-600">{run.failed_steps}</span>
-                </>
-              )}
             </div>
+            <div>
+              <span className="text-red-600">Failed:</span>
+              <span className="ml-2 font-medium text-red-600">{run.failed_steps || 0}</span>
+            </div>
+            {run.base_url && (
+              <div className="col-span-2">
+                <span className="text-co-gray-500">Base URL:</span>
+                <span className="ml-2 font-mono text-xs">{run.base_url}</span>
+              </div>
+            )}
           </div>
         </div>
 

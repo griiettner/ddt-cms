@@ -325,19 +325,42 @@ export const healthApi = {
   },
 };
 
+export interface TestRunsListParams {
+  releaseId?: number;
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  executedBy?: string;
+  startDate?: string;
+  endDate?: string;
+  testSetId?: number;
+  testSetName?: string;
+  environment?: string;
+}
+
+export interface TestRunFilterOptions {
+  environments: string[];
+  executedBy: string[];
+  testSets: { id: number; name: string }[];
+}
+
 export const testRunsApi = {
-  list(
-    params: { releaseId?: number; page?: number; pageSize?: number } = {}
-  ): Promise<TestRunsResponse> {
+  list(params: TestRunsListParams = {}): Promise<TestRunsResponse> {
     const query = new URLSearchParams(
       Object.entries(params)
-        .filter(([, v]) => v !== undefined)
+        .filter(([, v]) => v !== undefined && v !== '')
         .map(([k, v]) => [k, String(v)])
     ).toString();
     return api.get(`/test-runs${query ? `?${query}` : ''}`) as Promise<TestRunsResponse>;
   },
   get(id: number): Promise<TestRunResponse> {
     return api.get(`/test-runs/${id}`) as Promise<TestRunResponse>;
+  },
+  getFilterOptions(releaseId?: number): Promise<ApiResponse<TestRunFilterOptions>> {
+    const query = releaseId ? `?releaseId=${releaseId}` : '';
+    return api.get(`/test-runs/filter-options${query}`) as Promise<
+      ApiResponse<TestRunFilterOptions>
+    >;
   },
   create(data: CreateTestRunData) {
     return api.post('/test-runs', data);
