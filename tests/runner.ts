@@ -196,33 +196,54 @@ async function runTests(): Promise<TestRunResult> {
       }
     }
 
-    // Get video path before closing context
-    // The video is saved when the page/context is closed
-    if (page) {
-      const video = page.video();
-      if (video) {
-        // Close page first to finalize video
-        await page.close().catch(() => {
-          /* ignore cleanup errors */
-        });
-        page = null;
+    // Get video reference before closing
+    const video = page?.video();
 
-        try {
-          // Get the original video path
-          const originalPath = await video.path();
-          if (originalPath && fs.existsSync(originalPath)) {
+    // Close page and context to finalize the video
+    // Video is only fully written after context.close()
+    if (page) {
+      await page.close().catch(() => {
+        /* ignore cleanup errors */
+      });
+      page = null;
+    }
+    if (context) {
+      await context.close().catch(() => {
+        /* ignore cleanup errors */
+      });
+      context = null;
+    }
+
+    // Now get the video path (video is finalized after context close)
+    if (video) {
+      try {
+        const originalPath = await video.path();
+        console.log(`Original video path: ${originalPath}`);
+
+        if (originalPath && fs.existsSync(originalPath)) {
+          // Wait a moment for file to be fully written
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const stats = fs.statSync(originalPath);
+          console.log(`Video file size: ${stats.size} bytes`);
+
+          if (stats.size > 0) {
             // Rename to a predictable path based on test run ID
             const finalVideoName = `test-run-${TEST_RUN_ID}.webm`;
             const finalVideoPath = path.join(VIDEO_DIR, finalVideoName);
 
-            // Copy to final location (in case the original gets cleaned up)
+            // Copy to final location
             fs.copyFileSync(originalPath, finalVideoPath);
             videoPath = finalVideoPath;
             console.log(`Video saved to: ${finalVideoPath}`);
+          } else {
+            console.error('Video file is empty');
           }
-        } catch (videoErr) {
-          console.error('Failed to save video:', videoErr);
+        } else {
+          console.error('Video file does not exist at:', originalPath);
         }
+      } catch (videoErr) {
+        console.error('Failed to save video:', videoErr);
       }
     }
 
