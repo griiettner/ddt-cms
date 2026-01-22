@@ -2,7 +2,11 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getRegistryDb, getDb } from '../db/database.js';
 import type { TestRunRow, TotalResult, ApiResponse, TestRunStepRow } from '../types/index.js';
-import { testExecutionQueue, getTestRunSteps } from '../services/testExecutionQueue.js';
+import {
+  testExecutionQueue,
+  getTestRunSteps,
+  type ProgressUpdate,
+} from '../services/testExecutionQueue.js';
 
 const router: Router = express.Router();
 
@@ -330,6 +334,7 @@ interface StatusResponse extends TestRunWithRelease {
     isRunning: boolean;
     queuePosition: number | null;
   };
+  progress: ProgressUpdate | null;
 }
 
 // POST /api/test-runs/execute/:testSetId - Start Playwright execution
@@ -456,12 +461,14 @@ router.get(
       }
 
       // Get step results
-      const steps = getTestRunSteps(parseInt(id, 10));
+      const testRunId = parseInt(id, 10);
+      const steps = getTestRunSteps(testRunId);
 
-      // Get queue status
+      // Get queue status and progress
       const queueStatus = testExecutionQueue.getStatus();
-      const isRunning = testExecutionQueue.isRunning(parseInt(id, 10));
-      const queuePosition = queueStatus.pending.findIndex((p) => p.testRunId === parseInt(id, 10));
+      const isRunning = testExecutionQueue.isRunning(testRunId);
+      const queuePosition = queueStatus.pending.findIndex((p) => p.testRunId === testRunId);
+      const progress = testExecutionQueue.getProgress(testRunId);
 
       // Parse failed_details JSON
       const parsedRun: StatusResponse = {
@@ -472,6 +479,7 @@ router.get(
           isRunning,
           queuePosition: queuePosition === -1 ? null : queuePosition + 1,
         },
+        progress,
       };
 
       res.json({ success: true, data: parsedRun });

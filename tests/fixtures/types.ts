@@ -65,6 +65,7 @@ export interface StepResult {
   scenarioName: string;
   caseName: string;
   stepDefinition: string;
+  expectedResults: string | null;
   status: 'passed' | 'failed' | 'skipped';
   errorMessage?: string;
   durationMs: number;

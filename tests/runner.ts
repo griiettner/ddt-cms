@@ -141,6 +141,7 @@ async function runTests(): Promise<TestRunResult> {
             scenarioName: scenario.name,
             caseName: scenario.case_name,
             stepDefinition: step.step_definition,
+            expectedResults: step.expected_results,
             status: 'passed',
             durationMs: 0,
           };

@@ -286,6 +286,7 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
 
                                   {/* Step Content */}
                                   <div className="min-w-0 flex-1">
+                                    {/* Step Definition */}
                                     <div
                                       className={`text-sm font-medium ${
                                         step.status === 'passed'
@@ -297,6 +298,14 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
                                     >
                                       {step.step_definition || `Step ${idx + 1}`}
                                     </div>
+
+                                    {/* Expected Results */}
+                                    {step.expected_results && (
+                                      <div className="mt-1 text-xs text-co-gray-600">
+                                        <span className="font-medium">Expected:</span>{' '}
+                                        {step.expected_results}
+                                      </div>
+                                    )}
 
                                     {/* Duration */}
                                     <div className="mt-1 text-xs text-co-gray-500">

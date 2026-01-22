@@ -495,10 +495,21 @@ export interface TestRunStepResult {
   scenario_name: string | null;
   case_name: string | null;
   step_definition: string | null;
+  expected_results: string | null;
   status: 'passed' | 'failed' | 'skipped';
   error_message: string | null;
   duration_ms: number;
   executed_at: string;
+}
+
+export interface ProgressUpdate {
+  currentScenario: number;
+  totalScenarios: number;
+  scenarioName: string;
+  caseName: string;
+  currentStep: number;
+  totalSteps: number;
+  stepDefinition: string;
 }
 
 export interface TestRunStatusResponse extends TestRun {
@@ -507,6 +518,7 @@ export interface TestRunStatusResponse extends TestRun {
     isRunning: boolean;
     queuePosition: number | null;
   };
+  progress: ProgressUpdate | null;
 }
 
 export const testExecutionApi = {

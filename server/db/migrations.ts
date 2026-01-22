@@ -278,6 +278,7 @@ export const initSchema = (): void => {
       scenario_name VARCHAR(255),
       case_name VARCHAR(255),
       step_definition TEXT,
+      expected_results TEXT,
       status VARCHAR(20) CHECK(status IN ('passed', 'failed', 'skipped')),
       error_message TEXT,
       duration_ms INTEGER DEFAULT 0,
@@ -372,6 +373,16 @@ const runMigrations = (db: DatabaseInstance): void => {
     // Migration: Add base_url column to test_runs if not present
     if (!testRunsColumnNames.includes('base_url')) {
       db.exec('ALTER TABLE test_runs ADD COLUMN base_url TEXT');
+    }
+
+    // Migration: Add expected_results column to test_run_steps if not present
+    const testRunStepsColumns = db
+      .prepare('PRAGMA table_info(test_run_steps)')
+      .all() as TableColumnInfo[];
+    const testRunStepsColumnNames: string[] = testRunStepsColumns.map((c) => c.name);
+
+    if (!testRunStepsColumnNames.includes('expected_results')) {
+      db.exec('ALTER TABLE test_run_steps ADD COLUMN expected_results TEXT');
     }
   } catch (err) {
     const error = err as Error;

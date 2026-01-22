@@ -2,8 +2,19 @@
  * Action Handlers for Playwright Test Execution
  * Maps each action type to Playwright commands
  */
-import { expect, type Locator } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import type { ActionContext, ActionHandler, ActionType } from './types.js';
+
+/**
+ * Wait for page to be fully ready after navigation
+ * Checks: DOM content loaded, network idle, body visible
+ */
+async function waitForPageReady(url: string | RegExp, page: Page): Promise<void> {
+  await expect.poll(() => page.url(), { timeout: 30000, intervals: [500, 100] }).toMatch(url);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('body')).toBeVisible();
+}
 
 /**
  * Get a Playwright locator based on element_id
@@ -17,7 +28,7 @@ function getLocator(context: ActionContext): Locator {
   const elementId = step.element_id || '';
 
   // If starts with [data-testid=, use as-is
-  if (elementId.startsWith('[data-testid=')) {
+  if (elementId.startsWith('data-testid=')) {
     return page.locator(elementId);
   }
 
@@ -216,22 +227,49 @@ const handleTextPlain: ActionHandler = async (context) => {
 
 /**
  * URL Action Handler
- * Navigates to URL or verifies current URL
+ * Navigates to URL, clicks element to trigger navigation, or verifies current URL
  */
 const handleUrl: ActionHandler = async (context) => {
   const { page, step } = context;
   const url = getActionResult(step);
+  const stepType = step.type?.toLowerCase();
 
   // Determine if this is a navigation or assertion based on step type
-  const isNavigation =
-    step.type?.toLowerCase() === 'action' || step.type?.toLowerCase() === 'given';
+  const isNavigation = stepType === 'action' || stepType === 'given';
+  const isClickRedirect = stepType === 'button-click-redirect';
 
   if (isNavigation) {
-    // Navigate to the URL
+    // Navigate to the URL directly
     await page.goto(url);
-    await page.waitForLoadState('networkidle');
+    await waitForPageReady(url, page);
+  } else if (isClickRedirect) {
+    // Click the element and wait for navigation, then verify URL
+    const locator = getLocator(context);
+    const urlPattern = new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+
+    // Check if the link might open in a new tab
+    const targetAttr = await locator.getAttribute('target');
+    const isNewTab = targetAttr === '_blank';
+
+    if (isNewTab) {
+      // Handle new tab/popup scenario
+      const [newPage] = await Promise.all([
+        page.context().waitForEvent('page', { timeout: 30000 }),
+        locator.click(),
+      ]);
+      // Wait for the new page to be fully ready
+      await waitForPageReady(urlPattern, newPage);
+      // Verify URL
+      await expect(newPage).toHaveURL(urlPattern);
+      // Close the new tab
+      await newPage.close();
+    } else {
+      // Click and wait for page to be fully ready (URL change, network idle, DOM ready, body visible)
+      await locator.click();
+      await waitForPageReady(urlPattern, page);
+    }
   } else {
-    // Assert current URL matches
+    // Assert current URL matches (default behavior for assertions)
     await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 };

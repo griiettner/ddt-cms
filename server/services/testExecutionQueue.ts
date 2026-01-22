@@ -21,12 +21,24 @@ interface QueueItem {
   addedAt: Date;
 }
 
+// Progress update from Playwright runner
+export interface ProgressUpdate {
+  currentScenario: number;
+  totalScenarios: number;
+  scenarioName: string;
+  caseName: string;
+  currentStep: number;
+  totalSteps: number;
+  stepDefinition: string;
+}
+
 // Currently running execution
 interface CurrentExecution {
   testRunId: number;
   testSetId: number;
   process: ChildProcess | null;
   startedAt: Date;
+  progress: ProgressUpdate | null;
 }
 
 // Step result from Playwright runner
@@ -36,6 +48,7 @@ export interface PlaywrightStepResult {
   scenarioName: string;
   caseName: string;
   stepDefinition: string;
+  expectedResults: string | null;
   status: 'passed' | 'failed' | 'skipped';
   errorMessage?: string;
   durationMs: number;
@@ -111,6 +124,16 @@ class TestExecutionQueue extends EventEmitter {
   }
 
   /**
+   * Get progress for a specific test run
+   */
+  getProgress(testRunId: number): ProgressUpdate | null {
+    if (this.current?.testRunId === testRunId) {
+      return this.current.progress;
+    }
+    return null;
+  }
+
+  /**
    * Process the next item in the queue
    */
   private processNext(): void {
@@ -127,6 +150,7 @@ class TestExecutionQueue extends EventEmitter {
       testSetId: item.testSetId,
       process: null,
       startedAt: new Date(),
+      progress: null,
     };
 
     console.log(`[Queue] Starting test run ${item.testRunId}`);
@@ -190,7 +214,11 @@ class TestExecutionQueue extends EventEmitter {
         for (const line of lines) {
           if (line.startsWith('PROGRESS:')) {
             try {
-              const progress = JSON.parse(line.substring(9));
+              const progress = JSON.parse(line.substring(9)) as ProgressUpdate;
+              // Store progress in current execution
+              if (this.current && this.current.testRunId === item.testRunId) {
+                this.current.progress = progress;
+              }
               this.emit('progress', { testRunId: item.testRunId, ...progress });
             } catch {
               // Ignore parse errors
@@ -279,8 +307,8 @@ class TestExecutionQueue extends EventEmitter {
         const insertStep = db.prepare(`
           INSERT INTO test_run_steps (
             test_run_id, test_step_id, scenario_id, scenario_name,
-            case_name, step_definition, status, error_message, duration_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            case_name, step_definition, expected_results, status, error_message, duration_ms
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         for (const step of result.steps) {
@@ -291,6 +319,7 @@ class TestExecutionQueue extends EventEmitter {
             step.scenarioName,
             step.caseName,
             step.stepDefinition,
+            step.expectedResults || null,
             step.status,
             step.errorMessage || null,
             step.durationMs

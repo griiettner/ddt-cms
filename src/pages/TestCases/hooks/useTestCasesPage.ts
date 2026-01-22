@@ -722,11 +722,12 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
 
         // Poll for test completion
         const pollStatus = async (): Promise<void> => {
-          const maxAttempts = 120; // 2 minutes max with 1s intervals
+          const maxAttempts = 120; // 6 minutes max with 3s intervals
           let attempts = 0;
 
           const poll = async (): Promise<void> => {
             attempts++;
+
             try {
               const statusResponse = await testExecutionApi.getStatus(result.testRunId);
               const status = statusResponse.data;
@@ -740,17 +741,27 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
 
               // Check if test is still running
               if (status.status === 'running' || status.queueStatus.isRunning) {
-                // Update progress if we have step data
-                if (status.steps && status.steps.length > 0) {
-                  const lastStep = status.steps[status.steps.length - 1];
+                // Use real progress from the server if available
+                if (status.progress) {
+                  updateTestRunProgress({
+                    currentScenario: status.progress.currentScenario,
+                    totalScenarios: status.progress.totalScenarios,
+                    scenarioName: status.progress.scenarioName,
+                    caseName: status.progress.caseName,
+                    currentStep: status.progress.currentStep,
+                    totalSteps: status.progress.totalSteps,
+                    stepDefinition: status.progress.stepDefinition,
+                  });
+                } else {
+                  // Fallback: show generic running message
                   updateTestRunProgress({
                     currentScenario: 1,
-                    totalScenarios: status.total_scenarios || scenarios.length,
-                    scenarioName: lastStep.scenario_name || 'Running...',
-                    caseName: lastStep.case_name || '',
-                    currentStep: status.steps.length,
-                    totalSteps: status.total_steps || 0,
-                    stepDefinition: lastStep.step_definition || 'Executing...',
+                    totalScenarios: scenarios.length,
+                    scenarioName: 'Running tests...',
+                    caseName: '',
+                    currentStep: 0,
+                    totalSteps: 0,
+                    stepDefinition: 'Initializing Playwright...',
                   });
                 }
 
