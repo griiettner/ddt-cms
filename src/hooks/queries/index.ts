@@ -24,3 +24,4 @@ export {
 } from './useCategoriesQuery';
 export { useReusableCasesQuery, useReusableCaseQuery } from './useReusableCasesQuery';
 export { useAuditLogsQuery, useAuditLogsFiltersQuery } from './useAuditLogsQuery';
+export { useEnvironmentsQuery } from './useEnvironmentsQuery';

@@ -104,6 +104,10 @@ export interface TestRunProgress {
   stepDefinition: string;
 }
 
+interface EnvironmentSelectModalState {
+  open: boolean;
+}
+
 interface ModalsState {
   case: CaseModalState;
   scenario: ScenarioModalState;
@@ -114,6 +118,7 @@ interface ModalsState {
   deleteCaseConfirm: DeleteCaseConfirmState;
   deleteStepConfirm: DeleteStepConfirmState;
   testRun: TestRunModalState;
+  environmentSelect: EnvironmentSelectModalState;
 }
 
 interface TestCasesStoreState {
@@ -160,6 +165,7 @@ const initialState: TestCasesStoreState = {
       stepDefinition: '',
       results: null,
     },
+    environmentSelect: { open: false },
   },
 };
 
@@ -537,6 +543,27 @@ export const testCasesActions = {
     }));
   },
 
+  // Environment Select Modal
+  openEnvironmentSelectModal: (): void => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        environmentSelect: { open: true },
+      },
+    }));
+  },
+
+  closeEnvironmentSelectModal: (): void => {
+    testCasesStore.setState((state) => ({
+      ...state,
+      modals: {
+        ...state.modals,
+        environmentSelect: { open: false },
+      },
+    }));
+  },
+
   // Reset store
   reset: (): void => {
     testCasesStore.setState(initialState);
@@ -584,6 +611,8 @@ export interface UseTestCasesStoreReturn {
   updateTestRunProgress: (progress: TestRunProgress) => void;
   setTestRunResults: (results: TestRunResults) => void;
   closeTestRunModal: () => void;
+  openEnvironmentSelectModal: () => void;
+  closeEnvironmentSelectModal: () => void;
   reset: () => void;
 }
 

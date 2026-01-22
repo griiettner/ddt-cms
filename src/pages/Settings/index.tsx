@@ -11,9 +11,10 @@ import {
   ActionsSection,
   ConfigModal,
   ReusableCasesManager,
+  EnvironmentsSection,
 } from './components';
 
-type SettingsTab = 'config' | 'reusable';
+type SettingsTab = 'config' | 'reusable' | 'environments';
 
 function Settings(): JSX.Element {
   const { tab: activeTab } = useSearch({ strict: false }) as { tab?: SettingsTab };
@@ -84,10 +85,20 @@ function Settings(): JSX.Element {
           >
             Reusable Cases
           </button>
+          <button
+            onClick={() => setActiveTab('environments')}
+            className={`border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'environments'
+                ? 'border-co-blue-500 text-co-blue-600'
+                : 'border-transparent text-co-gray-500 hover:border-co-gray-300 hover:text-co-gray-700'
+            }`}
+          >
+            Environments
+          </button>
         </nav>
       </div>
 
-      {activeTab === 'config' ? (
+      {activeTab === 'config' && (
         <>
           {isLoading ? (
             <LoadingSpinner className="py-20" />
@@ -127,9 +138,11 @@ function Settings(): JSX.Element {
             confirmText={isDeleting ? 'Removing...' : 'Remove'}
           />
         </>
-      ) : (
-        <ReusableCasesManager />
       )}
+
+      {activeTab === 'reusable' && <ReusableCasesManager />}
+
+      {activeTab === 'environments' && <EnvironmentsSection />}
     </div>
   );
 }

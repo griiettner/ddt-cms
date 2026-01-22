@@ -249,6 +249,45 @@ export const initSchema = (): void => {
     CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_release ON audit_logs(release_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+
+    -- ================================
+    -- Playwright Test Execution Tables
+    -- ================================
+
+    -- Environment configurations for test execution
+    CREATE TABLE IF NOT EXISTS environment_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      release_id INTEGER,
+      environment VARCHAR(50) NOT NULL,
+      value TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+      UNIQUE(release_id, environment)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_environment_configs_release ON environment_configs(release_id);
+    CREATE INDEX IF NOT EXISTS idx_environment_configs_env ON environment_configs(environment);
+
+    -- Detailed step results for test runs
+    CREATE TABLE IF NOT EXISTS test_run_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      test_run_id INTEGER NOT NULL,
+      test_step_id INTEGER NOT NULL,
+      scenario_id INTEGER NOT NULL,
+      scenario_name VARCHAR(255),
+      case_name VARCHAR(255),
+      step_definition TEXT,
+      status VARCHAR(20) CHECK(status IN ('passed', 'failed', 'skipped')),
+      error_message TEXT,
+      duration_ms INTEGER DEFAULT 0,
+      executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (test_run_id) REFERENCES test_runs(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_test_run_steps_run ON test_run_steps(test_run_id);
+    CREATE INDEX IF NOT EXISTS idx_test_run_steps_scenario ON test_run_steps(scenario_id);
+    CREATE INDEX IF NOT EXISTS idx_test_run_steps_status ON test_run_steps(status);
   `);
 
   // Run migrations to ensure schema is up to date
@@ -323,6 +362,16 @@ const runMigrations = (db: DatabaseInstance): void => {
     if (!configColumnNames.includes('release_id')) {
       db.exec('ALTER TABLE configuration_options ADD COLUMN release_id INTEGER');
       db.exec('CREATE INDEX IF NOT EXISTS idx_config_release ON configuration_options(release_id)');
+    }
+
+    // Migration: Add environment column to test_runs if not present (for Playwright execution)
+    if (!testRunsColumnNames.includes('environment')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN environment VARCHAR(50)');
+    }
+
+    // Migration: Add base_url column to test_runs if not present
+    if (!testRunsColumnNames.includes('base_url')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN base_url TEXT');
     }
   } catch (err) {
     const error = err as Error;

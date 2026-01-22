@@ -53,6 +53,7 @@ import type {
   CreateFromCaseData,
   ReusableCaseStepData,
 } from '@/types/api';
+import type { TestRun } from '@/types/entities';
 
 const BASE_URL = '/api';
 
@@ -400,6 +401,138 @@ export const reusableCasesApi = {
   },
   syncSteps(id: number, steps: ReusableCaseStepData[]) {
     return api.put(`/reusable-cases/${id}/steps`, { steps });
+  },
+};
+
+// Environment configuration API
+export interface EnvironmentConfig {
+  id: number;
+  release_id: number | null;
+  environment: string;
+  value: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EnvironmentsResponse = ApiResponse<EnvironmentConfig[]>;
+export type EnvironmentResponse = ApiResponse<EnvironmentConfig>;
+
+export const environmentsApi = {
+  list(releaseId: number | string): Promise<EnvironmentsResponse> {
+    return api.get(`/config/${releaseId}/environments`) as Promise<EnvironmentsResponse>;
+  },
+  save(
+    releaseId: number | string,
+    data: { environment: string; url: string }
+  ): Promise<EnvironmentResponse> {
+    return api.post(`/config/${releaseId}/environments`, data) as Promise<EnvironmentResponse>;
+  },
+  delete(releaseId: number | string, environment: string) {
+    return api.delete(`/config/${releaseId}/environments/${environment}`);
+  },
+};
+
+// Test generation API for Playwright
+export interface TestGenerationStep {
+  id: number;
+  order_index: number;
+  step_definition: string;
+  type: string | null;
+  element_id: string | null;
+  action: string | null;
+  action_result: string | null;
+  select_config_id: number | null;
+  match_config_id: number | null;
+  required: number;
+  expected_results: string | null;
+}
+
+export interface TestGenerationScenario {
+  id: number;
+  name: string;
+  case_name: string;
+  case_id: number;
+  steps: TestGenerationStep[];
+}
+
+export interface TestGenerationCase {
+  id: number;
+  name: string;
+  scenarios: TestGenerationScenario[];
+}
+
+export interface TestGenerationData {
+  testSetId: number;
+  testSetName: string;
+  releaseId: number;
+  cases: TestGenerationCase[];
+  selectConfigs: { id: number; name: string; options: string; config_type: string }[];
+  matchConfigs: { id: number; name: string; options: string }[];
+}
+
+export type TestGenerationResponse = ApiResponse<TestGenerationData>;
+
+export const testGenerationApi = {
+  get(testSetId: number, releaseId: number): Promise<TestGenerationResponse> {
+    return api.get(
+      `/test-generation/${testSetId}?releaseId=${releaseId}`
+    ) as Promise<TestGenerationResponse>;
+  },
+};
+
+// Test run execution API
+export interface ExecuteTestRunResponse {
+  testRunId: number;
+  status: 'queued' | 'running';
+  queuePosition?: number;
+}
+
+export interface TestRunStepResult {
+  id: number;
+  test_run_id: number;
+  test_step_id: number;
+  scenario_id: number;
+  scenario_name: string | null;
+  case_name: string | null;
+  step_definition: string | null;
+  status: 'passed' | 'failed' | 'skipped';
+  error_message: string | null;
+  duration_ms: number;
+  executed_at: string;
+}
+
+export interface TestRunStatusResponse extends TestRun {
+  steps: TestRunStepResult[];
+  queueStatus: {
+    isRunning: boolean;
+    queuePosition: number | null;
+  };
+}
+
+export const testExecutionApi = {
+  execute(
+    testSetId: number,
+    data: { releaseId: number; environment: string }
+  ): Promise<ApiResponse<ExecuteTestRunResponse>> {
+    return api.post(`/test-runs/execute/${testSetId}`, data) as Promise<
+      ApiResponse<ExecuteTestRunResponse>
+    >;
+  },
+  getStatus(testRunId: number): Promise<ApiResponse<TestRunStatusResponse>> {
+    return api.get(`/test-runs/${testRunId}/status`) as Promise<ApiResponse<TestRunStatusResponse>>;
+  },
+  getQueueStatus(): Promise<
+    ApiResponse<{
+      current: { testRunId: number; startedAt: string } | null;
+      pending: { testRunId: number; addedAt: string }[];
+    }>
+  > {
+    return api.get('/test-runs/queue/status') as Promise<
+      ApiResponse<{
+        current: { testRunId: number; startedAt: string } | null;
+        pending: { testRunId: number; addedAt: string }[];
+      }>
+    >;
   },
 };
 

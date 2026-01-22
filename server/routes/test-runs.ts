@@ -1,7 +1,8 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getRegistryDb } from '../db/database.js';
-import type { TestRunRow, TotalResult, ApiResponse } from '../types/index.js';
+import { getRegistryDb, getDb } from '../db/database.js';
+import type { TestRunRow, TotalResult, ApiResponse, TestRunStepRow } from '../types/index.js';
+import { testExecutionQueue, getTestRunSteps } from '../services/testExecutionQueue.js';
 
 const router: Router = express.Router();
 
@@ -294,6 +295,203 @@ router.patch(
       stmt.run(...values, id);
 
       res.json({ success: true, data: undefined });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ================================
+// Playwright Execution Endpoints
+// ================================
+
+// Request body for execute
+interface ExecuteTestRunBody {
+  releaseId: number;
+  environment: string;
+}
+
+// Request params for execute
+interface ExecuteParams {
+  testSetId: string;
+}
+
+// Response types
+interface ExecuteResponse {
+  testRunId: number;
+  status: 'queued' | 'running';
+  queuePosition?: number;
+}
+
+interface StatusResponse extends TestRunWithRelease {
+  steps: TestRunStepRow[];
+  queueStatus: {
+    isRunning: boolean;
+    queuePosition: number | null;
+  };
+}
+
+// POST /api/test-runs/execute/:testSetId - Start Playwright execution
+router.post(
+  '/execute/:testSetId',
+  (
+    req: Request<ExecuteParams, unknown, ExecuteTestRunBody>,
+    res: Response<ApiResponse<ExecuteResponse>>
+  ): void => {
+    const { testSetId } = req.params;
+    const { releaseId, environment } = req.body;
+
+    if (!releaseId || !environment) {
+      res.status(400).json({ success: false, error: 'releaseId and environment are required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      // Get environment URL
+      const envConfig = db
+        .prepare(
+          `
+          SELECT value FROM environment_configs
+          WHERE (release_id = ? OR release_id IS NULL)
+            AND environment = ?
+          ORDER BY release_id DESC NULLS LAST
+          LIMIT 1
+        `
+        )
+        .get(releaseId, environment.toLowerCase()) as { value: string } | undefined;
+
+      if (!envConfig) {
+        res.status(400).json({
+          success: false,
+          error: `Environment "${environment}" not configured. Please configure it in Settings.`,
+        });
+        return;
+      }
+
+      // Get test set name
+      const testSet = db
+        .prepare('SELECT name FROM test_sets WHERE id = ? AND release_id = ?')
+        .get(testSetId, releaseId) as { name: string } | undefined;
+
+      if (!testSet) {
+        res.status(404).json({ success: false, error: 'Test set not found' });
+        return;
+      }
+
+      // Create test run record
+      const result = db
+        .prepare(
+          `
+          INSERT INTO test_runs (
+            release_id, test_set_id, test_set_name, status, environment, base_url, executed_by
+          ) VALUES (?, ?, ?, 'running', ?, ?, ?)
+        `
+        )
+        .run(
+          releaseId,
+          testSetId,
+          testSet.name,
+          environment,
+          envConfig.value,
+          req.user?.eid || null
+        );
+
+      const testRunId = Number(result.lastInsertRowid);
+
+      // Add to execution queue
+      testExecutionQueue.enqueue({
+        testRunId,
+        testSetId: parseInt(testSetId, 10),
+        releaseId,
+        baseUrl: envConfig.value,
+      });
+
+      // Get queue status
+      const queueStatus = testExecutionQueue.getStatus();
+      const queuePosition = queueStatus.pending.findIndex((p) => p.testRunId === testRunId);
+
+      res.json({
+        success: true,
+        data: {
+          testRunId,
+          status: queuePosition === -1 ? 'running' : 'queued',
+          queuePosition: queuePosition === -1 ? undefined : queuePosition + 1,
+        },
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Execute error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// GET /api/test-runs/:id/status - Get test run status with step-level results
+router.get(
+  '/:id/status',
+  (req: Request<IdParams>, res: Response<ApiResponse<StatusResponse>>): void => {
+    const { id } = req.params;
+
+    try {
+      const db = getRegistryDb();
+      const run = db
+        .prepare(
+          `
+          SELECT
+            tr.*,
+            r.release_number
+          FROM test_runs tr
+          LEFT JOIN releases r ON tr.release_id = r.id
+          WHERE tr.id = ?
+        `
+        )
+        .get(id) as (TestRunRow & { release_number?: string }) | undefined;
+
+      if (!run) {
+        res.status(404).json({ success: false, error: 'Test run not found' });
+        return;
+      }
+
+      // Get step results
+      const steps = getTestRunSteps(parseInt(id, 10));
+
+      // Get queue status
+      const queueStatus = testExecutionQueue.getStatus();
+      const isRunning = testExecutionQueue.isRunning(parseInt(id, 10));
+      const queuePosition = queueStatus.pending.findIndex((p) => p.testRunId === parseInt(id, 10));
+
+      // Parse failed_details JSON
+      const parsedRun: StatusResponse = {
+        ...run,
+        failed_details: run.failed_details ? (JSON.parse(run.failed_details) as unknown[]) : [],
+        steps,
+        queueStatus: {
+          isRunning,
+          queuePosition: queuePosition === -1 ? null : queuePosition + 1,
+        },
+      };
+
+      res.json({ success: true, data: parsedRun });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// GET /api/test-runs/queue/status - Get queue status
+router.get(
+  '/queue/status',
+  (
+    _req: Request,
+    res: Response<ApiResponse<ReturnType<typeof testExecutionQueue.getStatus>>>
+  ): void => {
+    try {
+      const status = testExecutionQueue.getStatus();
+      res.json({ success: true, data: status });
     } catch (err) {
       const error = err as Error;
       res.status(500).json({ success: false, error: error.message });

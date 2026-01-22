@@ -1,7 +1,12 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
-import type { ConfigOptionRow, MaxOrderResult, ApiResponse } from '../types/index.js';
+import type {
+  ConfigOptionRow,
+  MaxOrderResult,
+  ApiResponse,
+  EnvironmentConfigRow,
+} from '../types/index.js';
 import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
@@ -82,6 +87,168 @@ router.get(
     }
   }
 );
+
+// ================================
+// Environment Configuration Endpoints
+// IMPORTANT: These must come BEFORE the generic /:releaseId/:category routes
+// ================================
+
+// Request body for environment
+interface EnvironmentBody {
+  environment: string;
+  url: string;
+}
+
+interface EnvironmentParams {
+  releaseId: string;
+  environment: string;
+}
+
+// GET /api/config/:releaseId/environments - List environment URLs
+router.get(
+  '/:releaseId/environments',
+  (req: Request<ReleaseIdParams>, res: Response<ApiResponse<EnvironmentConfigRow[]>>): void => {
+    try {
+      const db = getDb();
+      const { releaseId } = req.params;
+
+      // Get environments for this release, falling back to global (NULL release_id)
+      const environments = db
+        .prepare(
+          `
+          SELECT * FROM environment_configs
+          WHERE release_id = ? OR release_id IS NULL
+          ORDER BY
+            CASE
+              WHEN environment = 'dev' THEN 1
+              WHEN environment = 'qa' THEN 2
+              WHEN environment = 'uat' THEN 3
+              ELSE 4
+            END,
+            environment ASC
+        `
+        )
+        .all(releaseId) as EnvironmentConfigRow[];
+
+      // Filter to prefer release-specific over global
+      const envMap = new Map<string, EnvironmentConfigRow>();
+      for (const env of environments) {
+        const existing = envMap.get(env.environment);
+        // Prefer release-specific (non-null release_id) over global
+        if (!existing || (env.release_id !== null && existing.release_id === null)) {
+          envMap.set(env.environment, env);
+        }
+      }
+
+      res.json({ success: true, data: Array.from(envMap.values()) });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// POST /api/config/:releaseId/environments - Create or update environment
+router.post(
+  '/:releaseId/environments',
+  (
+    req: Request<ReleaseIdParams, unknown, EnvironmentBody>,
+    res: Response<ApiResponse<EnvironmentConfigRow>>
+  ): void => {
+    const { environment, url } = req.body;
+    const { releaseId } = req.params;
+
+    if (!environment || !url) {
+      res.status(400).json({ success: false, error: 'Environment and URL are required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      // Use upsert pattern - insert or replace on conflict
+      const stmt = db.prepare(`
+        INSERT INTO environment_configs (release_id, environment, value, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(release_id, environment) DO UPDATE SET
+          value = excluded.value,
+          updated_at = CURRENT_TIMESTAMP
+      `);
+
+      // releaseId of 0 or 'global' means global config
+      const effectiveReleaseId = releaseId === '0' || releaseId === 'global' ? null : releaseId;
+      stmt.run(effectiveReleaseId, environment.toLowerCase(), url);
+
+      // Fetch the updated/created record
+      const created = db
+        .prepare(
+          `
+          SELECT * FROM environment_configs
+          WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
+            AND environment = ?
+        `
+        )
+        .get(
+          effectiveReleaseId,
+          effectiveReleaseId,
+          environment.toLowerCase()
+        ) as EnvironmentConfigRow;
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'environment_config',
+        resourceName: environment,
+        releaseId: releaseId,
+        details: { url },
+      });
+
+      res.json({ success: true, data: created });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// DELETE /api/config/:releaseId/environments/:environment - Delete environment
+router.delete(
+  '/:releaseId/environments/:environment',
+  (req: Request<EnvironmentParams>, res: Response<ApiResponse<undefined>>): void => {
+    const { releaseId, environment } = req.params;
+
+    try {
+      const db = getDb();
+
+      const effectiveReleaseId = releaseId === '0' || releaseId === 'global' ? null : releaseId;
+
+      db.prepare(
+        `
+        DELETE FROM environment_configs
+        WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
+          AND environment = ?
+      `
+      ).run(effectiveReleaseId, effectiveReleaseId, environment.toLowerCase());
+
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'environment_config',
+        resourceName: environment,
+        releaseId: releaseId,
+      });
+
+      res.json({ success: true, data: undefined });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ================================
+// Generic Configuration Endpoints
+// ================================
 
 // POST /api/config/:releaseId/:category - Add new option
 router.post(

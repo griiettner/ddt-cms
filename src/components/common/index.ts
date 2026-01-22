@@ -7,3 +7,4 @@ export { default as KebabMenu } from './KebabMenu';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as EmptyState } from './EmptyState';
 export { default as Navbar } from './Navbar';
+export { default as ErrorDisplay } from './ErrorDisplay';

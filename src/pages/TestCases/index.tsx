@@ -28,6 +28,7 @@ import {
   SelectConfigModal,
   MatchConfigModal,
   TestRunModal,
+  EnvironmentSelectModal,
 } from '@/components/test-cases';
 import { ConfirmModal, LoadingSpinner } from '@/components/common';
 import { useTestCasesPage } from './hooks/useTestCasesPage';
@@ -50,6 +51,7 @@ function TestCases(): JSX.Element {
     scenarios,
     selectedScenarioId,
     selectedScenario,
+    testSetName,
     openCases,
     testCases,
     steps,
@@ -126,6 +128,13 @@ function TestCases(): JSX.Element {
     // Test run
     handleRunTest,
     closeTestRunModal,
+
+    // Environment select modal
+    environments,
+    isEnvironmentsLoading,
+    handleConfirmRunTest,
+    closeEnvironmentSelectModal,
+    isExecutingTest,
   } = useTestCasesPage();
 
   // DnD sensors for drag and drop
@@ -417,6 +426,15 @@ function TestCases(): JSX.Element {
         stepDefinition={modals.testRun.stepDefinition}
         results={modals.testRun.results}
         onClose={closeTestRunModal}
+      />
+
+      <EnvironmentSelectModal
+        isOpen={modals.environmentSelect.open}
+        onClose={closeEnvironmentSelectModal}
+        onConfirm={handleConfirmRunTest}
+        environments={environments}
+        isLoading={isExecutingTest || isEnvironmentsLoading}
+        testSetName={testSetName}
       />
     </div>
   );

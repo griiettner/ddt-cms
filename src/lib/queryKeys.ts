@@ -141,6 +141,19 @@ export const queryKeys = {
       ['auditLogs', 'list', filters, page] as const,
     filters: () => ['auditLogs', 'filters'] as const,
   },
+
+  // Environment configs (per release or global)
+  environments: {
+    all: (releaseId: number | string) => ['environments', releaseId] as const,
+    list: (releaseId: number | string) => ['environments', releaseId, 'list'] as const,
+  },
+
+  // Test generation (for Playwright)
+  testGeneration: {
+    all: (releaseId: number) => ['testGeneration', releaseId] as const,
+    testSet: (releaseId: number, testSetId: number) =>
+      ['testGeneration', releaseId, testSetId] as const,
+  },
 };
 
 export default queryKeys;

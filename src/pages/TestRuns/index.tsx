@@ -5,7 +5,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 import { LoadingSpinner } from '@/components/common';
 import { useTestRunsPage } from './hooks/useTestRunsPage';
-import { TestRunsTable, TestRunDetailModal } from './components';
+import { TestRunsTable, TestRunDetailModal, TestRunReportModal } from './components';
 
 function TestRuns(): JSX.Element {
   const { releaseId: releaseSlug } = useParams({ strict: false }) as { releaseId?: string };
@@ -20,6 +20,11 @@ function TestRuns(): JSX.Element {
     isDetailModalOpen,
     openDetailModal,
     closeDetailModal,
+    // Report modal
+    reportRun,
+    isReportModalOpen,
+    openReportModal,
+    closeReportModal,
     // Pagination
     pagination,
     goToPage,
@@ -98,6 +103,7 @@ function TestRuns(): JSX.Element {
         <TestRunsTable
           testRuns={testRuns}
           onViewDetails={openDetailModal}
+          onViewReport={openReportModal}
           pagination={pagination}
           onPageChange={goToPage}
           onNextPage={goToNextPage}
@@ -108,6 +114,9 @@ function TestRuns(): JSX.Element {
 
       {/* Detail Modal */}
       <TestRunDetailModal isOpen={isDetailModalOpen} onClose={closeDetailModal} run={selectedRun} />
+
+      {/* Report Modal */}
+      <TestRunReportModal isOpen={isReportModalOpen} onClose={closeReportModal} run={reportRun} />
     </div>
   );
 }

@@ -245,3 +245,66 @@ export interface AuditLogRow {
   ip_address: string | null;
   user_agent: string | null;
 }
+
+// Environment configuration for Playwright test execution
+export interface EnvironmentConfigRow {
+  id: number;
+  release_id: number | null;
+  environment: string;
+  value: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Detailed step results for test runs
+export interface TestRunStepRow {
+  id: number;
+  test_run_id: number;
+  test_step_id: number;
+  scenario_id: number;
+  scenario_name: string | null;
+  case_name: string | null;
+  step_definition: string | null;
+  status: 'passed' | 'failed' | 'skipped';
+  error_message: string | null;
+  duration_ms: number;
+  executed_at: string;
+}
+
+// Test generation types for Playwright
+export interface TestGenerationStep {
+  id: number;
+  order_index: number;
+  step_definition: string;
+  type: string | null;
+  element_id: string | null;
+  action: string | null;
+  action_result: string | null;
+  select_config_id: number | null;
+  match_config_id: number | null;
+  required: number;
+  expected_results: string | null;
+}
+
+export interface TestGenerationScenario {
+  id: number;
+  name: string;
+  case_name: string;
+  case_id: number;
+  steps: TestGenerationStep[];
+}
+
+export interface TestGenerationCase {
+  id: number;
+  name: string;
+  scenarios: TestGenerationScenario[];
+}
+
+export interface TestGenerationData {
+  testSetId: number;
+  testSetName: string;
+  releaseId: number;
+  cases: TestGenerationCase[];
+  selectConfigs: SelectConfigRow[];
+  matchConfigs: MatchConfigRow[];
+}

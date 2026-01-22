@@ -1,6 +1,7 @@
 /**
  * TestRunDetailModal - Shows detailed information about a test run
  */
+import { ErrorDisplay } from '@/components/common';
 import type { TestRun } from '@/types/entities';
 
 interface FailedStepDetail {
@@ -131,10 +132,10 @@ function TestRunDetailModal({ isOpen, onClose, run }: TestRunDetailModalProps): 
                       <span className="text-xs text-red-400">›</span>
                       <span className="text-xs text-red-600">{step.scenarioName}</span>
                     </div>
-                    <div className="mb-1 text-sm font-medium text-red-700">
+                    <div className="mb-2 text-sm font-medium text-red-700">
                       {step.stepDefinition || `Step ${idx + 1}`}
                     </div>
-                    <div className="text-xs text-red-600">{step.error}</div>
+                    {step.error && <ErrorDisplay error={step.error} />}
                   </div>
                 ))}
               </div>

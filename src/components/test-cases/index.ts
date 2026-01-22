@@ -8,3 +8,4 @@ export { default as TypeConfigModal } from './TypeConfigModal';
 export { default as SelectConfigModal } from './SelectConfigModal';
 export { default as MatchConfigModal } from './MatchConfigModal';
 export { default as TestRunModal } from './TestRunModal';
+export { default as EnvironmentSelectModal } from './EnvironmentSelectModal';

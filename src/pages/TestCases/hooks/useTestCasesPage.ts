@@ -10,6 +10,7 @@ import {
   useStepsQuery,
   useAllConfigQuery,
   useTestSetQuery,
+  useEnvironmentsQuery,
 } from '@/hooks/queries';
 import {
   useCreateTestCase,
@@ -27,18 +28,16 @@ import {
   useSaveMatchConfig,
   useCopyReusableCase,
   useCreateReusableCaseFromCase,
+  useExecuteTestRun,
 } from '@/hooks/mutations';
+import { testExecutionApi } from '@/services/api';
 import { useRelease } from '@/context/ReleaseContext';
 import {
   useTestCasesStore,
-  type TestRunProgress,
-  type TestRunResults,
   type SelectConfigModalState,
   type MatchConfigModalState,
 } from '../stores/testCasesStore';
-// @ts-expect-error - testRunner.js is a JS file without type declarations
-import { runAllScenarios } from '../../../../temp/testRunner';
-import { testStepsApi, testRunsApi } from '@/services/api';
+import { type EnvironmentConfig } from '@/services/api';
 import type {
   TestScenario,
   TestCase,
@@ -178,8 +177,15 @@ export interface UseTestCasesPageReturn {
   setTypeConfigOptions: (options: string) => void;
 
   // Test run
-  handleRunTest: () => Promise<void>;
+  handleRunTest: () => void;
   closeTestRunModal: () => void;
+
+  // Environment select modal
+  environments: EnvironmentConfig[];
+  isEnvironmentsLoading: boolean;
+  handleConfirmRunTest: (environment: string) => Promise<void>;
+  closeEnvironmentSelectModal: () => void;
+  isExecutingTest: boolean;
 }
 
 export function useTestCasesPage(): UseTestCasesPageReturn {
@@ -220,6 +226,8 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
     updateTestRunProgress,
     setTestRunResults,
     closeTestRunModal,
+    openEnvironmentSelectModal,
+    closeEnvironmentSelectModal,
   } = useTestCasesStore();
 
   // Queries
@@ -247,6 +255,10 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
     actionOptions,
     isLoading: configLoading,
   } = useAllConfigQuery(selectedReleaseId);
+
+  // Environments for Playwright execution
+  const { data: environments = [], isLoading: environmentsLoading } =
+    useEnvironmentsQuery(selectedReleaseId);
 
   // Transform configs to have parsed options arrays
   const selectConfigs = useMemo((): ParsedSelectConfig[] => {
@@ -276,6 +288,7 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
   const reorderStepsMutation = useReorderSteps(selectedReleaseId, selectedScenarioId ?? 0);
   const updateTypesMutation = useUpdateTypes(selectedReleaseId);
   const saveSelectConfigMutation = useSaveSelectConfig();
+  const executeTestRunMutation = useExecuteTestRun();
   const saveMatchConfigMutation = useSaveMatchConfig();
   const copyReusableCaseMutation = useCopyReusableCase();
   const createReusableCaseFromCaseMutation = useCreateReusableCaseFromCase();
@@ -663,99 +676,180 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
     setMatchConfigField('options', cfg?.options.join('\n') || '');
   };
 
-  // Run test simulation for all cases and scenarios
-  const handleRunTest = useCallback(async (): Promise<void> => {
+  // Open environment select modal when user clicks Run Test
+  const handleRunTest = useCallback((): void => {
     if (scenarios.length === 0) {
       alert('No scenarios to run. Please create at least one scenario with steps.');
       return;
     }
+    openEnvironmentSelectModal();
+  }, [scenarios.length, openEnvironmentSelectModal]);
 
-    openTestRunModal(scenarios.length);
+  // Execute Playwright test after environment is selected
+  const handleConfirmRunTest = useCallback(
+    async (environment: string): Promise<void> => {
+      if (!testSetId) {
+        alert('Test set ID is required');
+        return;
+      }
 
-    try {
-      // Fetch steps for all scenarios
-      const scenariosWithSteps = await Promise.all(
-        scenarios.map(async (scenario) => {
-          try {
-            const res = await testStepsApi.list(Number(selectedReleaseId), {
-              scenarioId: scenario.id,
-            });
-            return {
-              ...scenario,
-              steps: res.data || [],
-            };
-          } catch (err) {
-            console.error(`Failed to fetch steps for scenario ${scenario.id}`, err);
-            return {
-              ...scenario,
-              steps: [],
-            };
-          }
-        })
-      );
-
-      // Run all scenarios
-      const results = await runAllScenarios(scenariosWithSteps, (progress: TestRunProgress) => {
-        updateTestRunProgress(progress);
-      });
-      setTestRunResults(results as TestRunResults);
-
-      // Save test run to database
-      const failedDetails =
-        results.scenarios?.flatMap(
-          (s: {
-            scenarioName: string;
-            caseName: string;
-            steps?: { status: string; stepId: number; stepDefinition: string; error?: string }[];
-          }) =>
-            s.steps
-              ?.filter((step) => step.status === 'failed')
-              .map((step) => ({
-                stepId: step.stepId,
-                stepDefinition: step.stepDefinition,
-                scenarioName: s.scenarioName,
-                caseName: s.caseName,
-                error: step.error,
-              })) || []
-        ) || [];
+      closeEnvironmentSelectModal();
+      openTestRunModal(scenarios.length);
 
       try {
-        if (!testSetId) throw new Error('Test set ID is required');
-        await testRunsApi.create({
-          releaseId: Number(selectedReleaseId),
+        // Start Playwright test execution
+        const result = await executeTestRunMutation.mutateAsync({
           testSetId,
-          testSetName: testSetName,
-          status: results.failed > 0 ? 'failed' : 'passed',
-          durationMs: results.duration,
-          totalScenarios: results.totalScenarios,
-          totalSteps: results.totalSteps,
-          passedSteps: results.passed,
-          failedSteps: results.failed,
-          failedDetails: failedDetails,
+          releaseId: Number(selectedReleaseId),
+          environment,
         });
-      } catch (saveErr) {
-        console.error('Failed to save test run', saveErr);
+
+        console.log('Test execution started:', result);
+
+        // Show initial running status
+        updateTestRunProgress({
+          currentScenario: 1,
+          totalScenarios: scenarios.length,
+          scenarioName:
+            result.status === 'queued' ? 'Waiting in queue...' : 'Starting Playwright...',
+          caseName: '',
+          currentStep: 0,
+          totalSteps: 0,
+          stepDefinition: result.queuePosition
+            ? `Queue position: ${result.queuePosition}`
+            : 'Initializing test runner...',
+        });
+
+        // Poll for test completion
+        const pollStatus = async (): Promise<void> => {
+          const maxAttempts = 120; // 2 minutes max with 1s intervals
+          let attempts = 0;
+
+          const poll = async (): Promise<void> => {
+            attempts++;
+            try {
+              const statusResponse = await testExecutionApi.getStatus(result.testRunId);
+              const status = statusResponse.data;
+
+              if (!status) {
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 3000);
+                }
+                return;
+              }
+
+              // Check if test is still running
+              if (status.status === 'running' || status.queueStatus.isRunning) {
+                // Update progress if we have step data
+                if (status.steps && status.steps.length > 0) {
+                  const lastStep = status.steps[status.steps.length - 1];
+                  updateTestRunProgress({
+                    currentScenario: 1,
+                    totalScenarios: status.total_scenarios || scenarios.length,
+                    scenarioName: lastStep.scenario_name || 'Running...',
+                    caseName: lastStep.case_name || '',
+                    currentStep: status.steps.length,
+                    totalSteps: status.total_steps || 0,
+                    stepDefinition: lastStep.step_definition || 'Executing...',
+                  });
+                }
+
+                if (attempts < maxAttempts) {
+                  setTimeout(poll, 3000);
+                }
+                return;
+              }
+
+              // Test completed - show results
+              const passedSteps = status.passed_steps || 0;
+              const failedSteps = status.failed_steps || 0;
+              const totalSteps = status.total_steps || 0;
+
+              // Group steps by scenario for the results display
+              const scenarioResults = status.steps
+                .filter((s) => s.status === 'failed')
+                .map((step) => ({
+                  scenarioId: step.scenario_id,
+                  scenarioName: step.scenario_name || 'Unknown Scenario',
+                  caseName: step.case_name || 'Unknown Case',
+                  steps: [
+                    {
+                      stepId: step.test_step_id,
+                      stepDefinition: step.step_definition || '',
+                      status: 'failed' as const,
+                      error: step.error_message || 'Test failed',
+                    },
+                  ],
+                }));
+
+              setTestRunResults({
+                totalScenarios: status.total_scenarios || 1,
+                totalSteps,
+                passed: passedSteps,
+                failed: failedSteps,
+                scenarios: scenarioResults,
+                duration: status.duration_ms || 0,
+              });
+            } catch (pollErr) {
+              console.error('Error polling test status:', pollErr);
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 2000); // Retry with longer delay on error
+              } else {
+                setTestRunResults({
+                  totalScenarios: scenarios.length,
+                  totalSteps: 0,
+                  passed: 0,
+                  failed: 0,
+                  scenarios: [],
+                  duration: 0,
+                });
+              }
+            }
+          };
+
+          // Start polling after a short delay
+          setTimeout(poll, 3000);
+        };
+
+        pollStatus();
+      } catch (err) {
+        const error = err as Error;
+        console.error('Failed to start test execution:', error);
+        setTestRunResults({
+          totalScenarios: scenarios.length,
+          totalSteps: 0,
+          passed: 0,
+          failed: 1,
+          scenarios: [
+            {
+              scenarioId: 0,
+              scenarioName: 'Execution Error',
+              caseName: 'System',
+              steps: [
+                {
+                  stepId: 0,
+                  stepDefinition: 'Start test execution',
+                  status: 'failed',
+                  error: error.message,
+                },
+              ],
+            },
+          ],
+          duration: 0,
+        });
       }
-    } catch (err) {
-      console.error('Test run failed', err);
-      setTestRunResults({
-        totalScenarios: scenarios.length,
-        totalSteps: 0,
-        passed: 0,
-        failed: 0,
-        scenarios: [],
-        duration: 0,
-      });
-    }
-  }, [
-    scenarios,
-    selectedReleaseId,
-    testSetId,
-    testSetName,
-    openTestRunModal,
-    updateTestRunProgress,
-    setTestRunResults,
-  ]);
+    },
+    [
+      testSetId,
+      selectedReleaseId,
+      scenarios.length,
+      closeEnvironmentSelectModal,
+      openTestRunModal,
+      executeTestRunMutation,
+      updateTestRunProgress,
+      setTestRunResults,
+    ]
+  );
 
   return {
     // Route params
@@ -844,6 +938,13 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
     // Test run
     handleRunTest,
     closeTestRunModal,
+
+    // Environment select modal
+    environments,
+    isEnvironmentsLoading: environmentsLoading,
+    handleConfirmRunTest,
+    closeEnvironmentSelectModal,
+    isExecutingTest: executeTestRunMutation.isPending,
   };
 }
 

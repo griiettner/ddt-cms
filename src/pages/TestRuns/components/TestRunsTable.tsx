@@ -7,6 +7,7 @@ import type { TestRunPagination } from '@/types/api';
 interface TestRunsTableProps {
   testRuns: TestRun[];
   onViewDetails: (run: TestRun) => void;
+  onViewReport?: (run: TestRun) => void;
   pagination: TestRunPagination;
   onPageChange: (page: number) => void;
   onNextPage: () => void;
@@ -87,6 +88,7 @@ function generatePageNumbers(currentPage: number, totalPages: number): (number |
 function TestRunsTable({
   testRuns,
   onViewDetails,
+  onViewReport,
   pagination,
   onPageChange,
   onNextPage,
@@ -171,12 +173,22 @@ function TestRunsTable({
                 <td className="text-sm text-co-gray-500">{formatDuration(run.duration_ms)}</td>
                 <td className="text-sm text-co-gray-500">{formatDate(run.executed_at)}</td>
                 <td>
-                  <button
-                    onClick={() => onViewDetails(run)}
-                    className="text-sm font-medium text-co-blue transition-colors hover:text-co-blue-hover"
-                  >
-                    View
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => onViewDetails(run)}
+                      className="text-sm font-medium text-co-blue transition-colors hover:text-co-blue-hover"
+                    >
+                      View
+                    </button>
+                    {onViewReport && run.status !== 'running' && (
+                      <button
+                        onClick={() => onViewReport(run)}
+                        className="text-sm font-medium text-co-gray-500 transition-colors hover:text-co-gray-700"
+                      >
+                        Report
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

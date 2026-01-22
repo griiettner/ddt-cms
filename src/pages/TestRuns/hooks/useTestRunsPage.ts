@@ -40,13 +40,19 @@ interface UseTestRunsPageReturn {
   isError: boolean;
   error: Error | null;
 
-  // Modal state
+  // Detail Modal state
   selectedRun: TestRun | null;
   isDetailModalOpen: boolean;
-
-  // Actions
   openDetailModal: (run: TestRun) => void;
   closeDetailModal: () => void;
+
+  // Report Modal state
+  reportRun: TestRun | null;
+  isReportModalOpen: boolean;
+  openReportModal: (run: TestRun) => void;
+  closeReportModal: () => void;
+
+  // Actions
   refetch: () => void;
 }
 
@@ -54,6 +60,8 @@ export function useTestRunsPage(): UseTestRunsPageReturn {
   const { selectedReleaseId, selectedRelease } = useRelease();
   const [selectedRun, setSelectedRun] = useState<TestRun | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [reportRun, setReportRun] = useState<TestRun | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -102,6 +110,18 @@ export function useTestRunsPage(): UseTestRunsPageReturn {
   const closeDetailModal = useCallback(() => {
     setSelectedRun(null);
     setIsDetailModalOpen(false);
+  }, []);
+
+  // Open report modal for a specific run
+  const openReportModal = useCallback((run: TestRun) => {
+    setReportRun(run);
+    setIsReportModalOpen(true);
+  }, []);
+
+  // Close report modal
+  const closeReportModal = useCallback(() => {
+    setReportRun(null);
+    setIsReportModalOpen(false);
   }, []);
 
   // Pagination handlers
@@ -158,13 +178,19 @@ export function useTestRunsPage(): UseTestRunsPageReturn {
     isError,
     error: error || null,
 
-    // Modal state
+    // Detail Modal state
     selectedRun,
     isDetailModalOpen,
-
-    // Actions
     openDetailModal,
     closeDetailModal,
+
+    // Report Modal state
+    reportRun,
+    isReportModalOpen,
+    openReportModal,
+    closeReportModal,
+
+    // Actions
     refetch,
   };
 }

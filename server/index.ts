@@ -48,6 +48,7 @@ import categoryRoutes from './routes/categories.js';
 import testRunRoutes from './routes/test-runs.js';
 import reusableCasesRoutes from './routes/reusable-cases.js';
 import auditLogRoutes from './routes/audit-logs.js';
+import testGenerationRoutes from './routes/test-generation.js';
 
 // Middleware
 app.use(
@@ -139,6 +140,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/test-runs', testRunRoutes);
 app.use('/api/reusable-cases', reusableCasesRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/test-generation', testGenerationRoutes);
 
 // SPA fallback - serve index.html for non-API routes when serving static files
 if (serveStatic) {
