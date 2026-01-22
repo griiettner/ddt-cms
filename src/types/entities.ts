@@ -199,6 +199,7 @@ export interface TestRun {
   release_number?: string;
   environment: string | null;
   base_url: string | null;
+  video_path: string | null;
 }
 
 // User Types

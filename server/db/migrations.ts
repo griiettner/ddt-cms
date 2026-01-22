@@ -396,6 +396,11 @@ const runMigrations = (db: DatabaseInstance): void => {
     if (!auditLogsColumnNames.includes('new_value')) {
       db.exec('ALTER TABLE audit_logs ADD COLUMN new_value TEXT');
     }
+
+    // Migration: Add video_path column to test_runs for Playwright video recordings
+    if (!testRunsColumnNames.includes('video_path')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN video_path TEXT');
+    }
   } catch (err) {
     const error = err as Error;
     console.error('Migration warning (non-fatal):', error.message);

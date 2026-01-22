@@ -193,6 +193,9 @@ export interface TestRunRow {
   passed_steps: number;
   failed_steps: number;
   failed_details: string | null; // JSON string
+  environment: string | null;
+  base_url: string | null;
+  video_path: string | null;
 }
 
 // Count result type

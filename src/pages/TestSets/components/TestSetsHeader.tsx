@@ -13,6 +13,9 @@ function TestSetsHeader({ onCreateClick }: TestSetsHeaderProps): JSX.Element {
       </div>
       <div className="flex items-center gap-4">
         <ReleaseSelector className="w-48" />
+        <button className="btn-outline" disabled>
+          Run 7PS Test
+        </button>
         <button onClick={onCreateClick} className="btn-primary">
           + New Test Set
         </button>

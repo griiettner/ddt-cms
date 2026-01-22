@@ -3,6 +3,8 @@
  * Executes tests based on test data from the database
  */
 import { chromium, type Browser, type Page, type BrowserContext } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 import { executeStep } from './fixtures/actionHandlers.js';
 import type {
   TestData,
@@ -19,6 +21,9 @@ const TEST_SET_ID = process.env.TEST_SET_ID;
 const RELEASE_ID = process.env.RELEASE_ID;
 const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
+
+// Video storage directory (will be created if it doesn't exist)
+const VIDEO_DIR = path.join(process.cwd(), 'test-results', 'videos');
 
 /**
  * Fetch test data from the API
@@ -60,12 +65,18 @@ async function runTests(): Promise<TestRunResult> {
   let totalSteps = 0;
   let passedSteps = 0;
   let failedSteps = 0;
+  let videoPath: string | undefined;
 
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
   let page: Page | null = null;
 
   try {
+    // Ensure video directory exists
+    if (!fs.existsSync(VIDEO_DIR)) {
+      fs.mkdirSync(VIDEO_DIR, { recursive: true });
+    }
+
     // Fetch test data
     console.log('Fetching test data...');
     const testData = await fetchTestData();
@@ -95,11 +106,15 @@ async function runTests(): Promise<TestRunResult> {
     console.log(`Total scenarios: ${totalScenarios}`);
     console.log(`Total steps: ${totalSteps}`);
 
-    // Launch browser
-    console.log('Launching browser...');
+    // Launch browser with video recording
+    console.log('Launching browser with video recording...');
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
+      recordVideo: {
+        dir: VIDEO_DIR,
+        size: { width: 1280, height: 720 },
+      },
     });
     page = await context.newPage();
 
@@ -181,6 +196,36 @@ async function runTests(): Promise<TestRunResult> {
       }
     }
 
+    // Get video path before closing context
+    // The video is saved when the page/context is closed
+    if (page) {
+      const video = page.video();
+      if (video) {
+        // Close page first to finalize video
+        await page.close().catch(() => {
+          /* ignore cleanup errors */
+        });
+        page = null;
+
+        try {
+          // Get the original video path
+          const originalPath = await video.path();
+          if (originalPath && fs.existsSync(originalPath)) {
+            // Rename to a predictable path based on test run ID
+            const finalVideoName = `test-run-${TEST_RUN_ID}.webm`;
+            const finalVideoPath = path.join(VIDEO_DIR, finalVideoName);
+
+            // Copy to final location (in case the original gets cleaned up)
+            fs.copyFileSync(originalPath, finalVideoPath);
+            videoPath = finalVideoPath;
+            console.log(`Video saved to: ${finalVideoPath}`);
+          }
+        } catch (videoErr) {
+          console.error('Failed to save video:', videoErr);
+        }
+      }
+    }
+
     const result: TestRunResult = {
       testRunId: TEST_RUN_ID ? parseInt(TEST_RUN_ID, 10) : 0,
       status: failedSteps > 0 ? 'failed' : 'passed',
@@ -190,6 +235,7 @@ async function runTests(): Promise<TestRunResult> {
       passedSteps,
       failedSteps,
       steps: stepResults,
+      videoPath,
     };
 
     return result;

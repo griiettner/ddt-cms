@@ -91,6 +91,7 @@ export interface TestRunResult {
   passedSteps: number;
   failedSteps: number;
   steps: StepResult[];
+  videoPath?: string; // Path to recorded video file
 }
 
 // Progress update for real-time tracking

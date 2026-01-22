@@ -9,6 +9,7 @@ export default defineConfig({
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
+    video: 'on', // Record video for all tests
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   outputDir: 'test-results',

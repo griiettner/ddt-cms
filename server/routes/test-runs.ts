@@ -1,5 +1,7 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getRegistryDb, getDb } from '../db/database.js';
 import type { TestRunRow, TotalResult, ApiResponse, TestRunStepRow } from '../types/index.js';
 import {
@@ -635,5 +637,71 @@ router.get(
     }
   }
 );
+
+// GET /api/test-runs/:id/video - Stream video file for test run
+router.get('/:id/video', (req: Request<IdParams>, res: Response): void => {
+  const { id } = req.params;
+
+  try {
+    const db = getRegistryDb();
+    const run = db.prepare('SELECT video_path FROM test_runs WHERE id = ?').get(id) as
+      | { video_path: string | null }
+      | undefined;
+
+    if (!run || !run.video_path) {
+      res.status(404).json({ success: false, error: 'Video not found for this test run' });
+      return;
+    }
+
+    // Resolve video path (handle both absolute and relative paths)
+    let videoPath = run.video_path;
+    if (!path.isAbsolute(videoPath)) {
+      videoPath = path.join(process.cwd(), videoPath);
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(videoPath)) {
+      res.status(404).json({ success: false, error: 'Video file not found on disk' });
+      return;
+    }
+
+    // Get file stats
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // Handle range requests for video seeking
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      const file = fs.createReadStream(videoPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': 'video/webm',
+      };
+
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // Send entire file
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/webm',
+      };
+
+      res.writeHead(200, head);
+      fs.createReadStream(videoPath).pipe(res);
+    }
+  } catch (err) {
+    const error = err as Error;
+    console.error('Video streaming error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 export default router;

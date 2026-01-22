@@ -64,6 +64,7 @@ export interface PlaywrightRunResult {
   passedSteps: number;
   failedSteps: number;
   steps: PlaywrightStepResult[];
+  videoPath?: string;
 }
 
 class TestExecutionQueue extends EventEmitter {
@@ -290,7 +291,8 @@ class TestExecutionQueue extends EventEmitter {
             total_scenarios = ?,
             total_steps = ?,
             passed_steps = ?,
-            failed_steps = ?
+            failed_steps = ?,
+            video_path = ?
           WHERE id = ?
         `
         ).run(
@@ -300,6 +302,7 @@ class TestExecutionQueue extends EventEmitter {
           result.totalSteps,
           result.passedSteps,
           result.failedSteps,
+          result.videoPath || null,
           result.testRunId
         );
 
