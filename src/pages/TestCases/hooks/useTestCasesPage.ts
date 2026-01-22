@@ -19,6 +19,8 @@ import {
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,
+  useReorderScenarios,
+  useReorderCases,
   useUpdateStepField,
   useAddStep,
   useDeleteStep,
@@ -115,6 +117,8 @@ export interface UseTestCasesPageReturn {
   handleSelectScenario: (id: number) => void;
   toggleCase: (caseName: string) => void;
   handleUpdateScenarioName: (scenarioId: number, name: string) => Promise<void>;
+  handleReorderScenarios: (testCaseId: number, scenarioIds: number[]) => Promise<void>;
+  handleReorderCases: (caseIds: number[]) => Promise<void>;
 
   // Case modal
   handleOpenCaseModal: () => void;
@@ -453,6 +457,35 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
       alert(error.message);
     }
   };
+
+  // Reorder scenarios within a test case
+  const reorderScenariosMutation = useReorderScenarios(selectedReleaseId);
+
+  const handleReorderScenarios = useCallback(
+    async (testCaseId: number, scenarioIds: number[]): Promise<void> => {
+      try {
+        await reorderScenariosMutation.mutateAsync({ testCaseId, scenarioIds });
+      } catch (err) {
+        console.error('Failed to reorder scenarios', err);
+      }
+    },
+    [reorderScenariosMutation]
+  );
+
+  // Reorder test cases within a test set
+  const reorderCasesMutation = useReorderCases(selectedReleaseId);
+
+  const handleReorderCases = useCallback(
+    async (caseIds: number[]): Promise<void> => {
+      if (!testSetId) return;
+      try {
+        await reorderCasesMutation.mutateAsync({ testSetId, caseIds });
+      } catch (err) {
+        console.error('Failed to reorder cases', err);
+      }
+    },
+    [testSetId, reorderCasesMutation]
+  );
 
   // Delete Scenario
   const handleDeleteScenario = async (): Promise<void> => {
@@ -891,6 +924,8 @@ export function useTestCasesPage(): UseTestCasesPageReturn {
     handleSelectScenario,
     toggleCase,
     handleUpdateScenarioName,
+    handleReorderScenarios,
+    handleReorderCases,
 
     // Case modal
     handleOpenCaseModal,

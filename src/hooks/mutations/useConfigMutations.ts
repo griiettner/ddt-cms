@@ -68,6 +68,36 @@ export function useDeleteConfig(releaseId: number | string) {
 }
 
 /**
+ * Reorder types
+ */
+export function useReorderTypes(releaseId: number | string) {
+  const queryClient = useQueryClient();
+  const id = Number(releaseId);
+
+  return useMutation({
+    mutationFn: (ids: number[]) => configApi.reorderTypes(id, ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.config.types(id) });
+    },
+  });
+}
+
+/**
+ * Reorder actions
+ */
+export function useReorderActions(releaseId: number | string) {
+  const queryClient = useQueryClient();
+  const id = Number(releaseId);
+
+  return useMutation({
+    mutationFn: (ids: number[]) => configApi.reorderActions(id, ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.config.actions(id) });
+    },
+  });
+}
+
+/**
  * Create a select config
  */
 export function useCreateSelectConfig() {
@@ -298,6 +328,8 @@ export default {
   useCreateType,
   useCreateAction,
   useDeleteConfig,
+  useReorderTypes,
+  useReorderActions,
   useCreateSelectConfig,
   useUpdateSelectConfig,
   useDeleteSelectConfig,

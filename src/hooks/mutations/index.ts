@@ -20,6 +20,8 @@ export {
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,
+  useReorderScenarios,
+  useReorderCases,
 } from './useScenarioMutations';
 
 export {
@@ -36,6 +38,8 @@ export {
   useCreateType,
   useCreateAction,
   useDeleteConfig,
+  useReorderTypes,
+  useReorderActions,
   useCreateSelectConfig,
   useUpdateSelectConfig,
   useDeleteSelectConfig,

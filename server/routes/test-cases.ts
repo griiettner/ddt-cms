@@ -202,6 +202,51 @@ router.patch(
   }
 );
 
+// PUT /api/test-cases/:releaseId/reorder - Reorder test cases within a test set
+interface ReorderCasesBody {
+  testSetId: number;
+  caseIds: number[];
+}
+
+router.put(
+  '/:releaseId/reorder',
+  (req: Request<ReleaseIdParams, unknown, ReorderCasesBody>, res: Response): void => {
+    const { releaseId } = req.params;
+    const { testSetId, caseIds } = req.body;
+
+    if (!testSetId || !Array.isArray(caseIds) || caseIds.length === 0) {
+      res.status(400).json({ success: false, error: 'testSetId and caseIds array are required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      db.transaction(() => {
+        const stmt = db.prepare(
+          'UPDATE test_cases SET order_index = ? WHERE id = ? AND test_set_id = ? AND release_id = ?'
+        );
+        caseIds.forEach((caseId, index) => {
+          stmt.run(index, caseId, testSetId, releaseId);
+        });
+      })();
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_case',
+        releaseId: releaseId,
+        details: { reordered: caseIds.length, testSetId },
+      });
+
+      res.json({ success: true, data: undefined });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 // DELETE /api/test-cases/:releaseId/:id - Delete test case and all scenarios/steps
 router.delete('/:releaseId/:id', (req: Request<TestCaseIdParams>, res: Response): void => {
   const { releaseId, id } = req.params;
@@ -387,6 +432,53 @@ router.patch(
       });
 
       res.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// PUT /api/test-cases/scenarios/:releaseId/reorder - Reorder scenarios within a case
+interface ReorderScenariosBody {
+  testCaseId: number;
+  scenarioIds: number[];
+}
+
+router.put(
+  '/scenarios/:releaseId/reorder',
+  (req: Request<ReleaseIdParams, unknown, ReorderScenariosBody>, res: Response): void => {
+    const { releaseId } = req.params;
+    const { testCaseId, scenarioIds } = req.body;
+
+    if (!testCaseId || !Array.isArray(scenarioIds) || scenarioIds.length === 0) {
+      res
+        .status(400)
+        .json({ success: false, error: 'testCaseId and scenarioIds array are required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      db.transaction(() => {
+        const stmt = db.prepare(
+          'UPDATE test_scenarios SET order_index = ? WHERE id = ? AND test_case_id = ? AND release_id = ?'
+        );
+        scenarioIds.forEach((scenarioId, index) => {
+          stmt.run(index, scenarioId, testCaseId, releaseId);
+        });
+      })();
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: 'test_scenario',
+        releaseId: releaseId,
+        details: { reordered: scenarioIds.length, testCaseId },
+      });
+
+      res.json({ success: true, data: undefined });
     } catch (err) {
       const error = err as Error;
       res.status(500).json({ success: false, error: error.message });

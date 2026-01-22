@@ -238,6 +238,25 @@ const handlePassword: ActionHandler = async (context) => {
 };
 
 /**
+ * Build a URL pattern for matching
+ * - Full URLs (http:// or https://) match exactly
+ * - Partial URLs (paths like /test-cases?id=5) match anywhere in the full URL
+ */
+function buildUrlPattern(url: string): RegExp {
+  // Escape special regex characters
+  const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // For full URLs, match more strictly (from start or with base variations)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return new RegExp(escaped);
+  }
+
+  // For partial URLs (paths), match the path anywhere in the URL
+  // This allows /test-cases?testSetId=5 to match http://localhost:5173/test-cases?testSetId=5
+  return new RegExp(escaped);
+}
+
+/**
  * URL Action Handler
  * Navigates to URL, clicks element to trigger navigation, or verifies current URL
  */
@@ -250,14 +269,17 @@ const handleUrl: ActionHandler = async (context) => {
   const isNavigation = stepType === 'action' || stepType === 'given';
   const isClickRedirect = stepType === 'button-click-redirect';
 
+  // Build URL pattern for matching (supports partial URLs)
+  const urlPattern = buildUrlPattern(url);
+
   if (isNavigation) {
     // Navigate to the URL directly
+    // Playwright's baseURL config will prepend base for relative paths
     await page.goto(url);
-    await waitForPageReady(url, page);
+    await waitForPageReady(urlPattern, page);
   } else if (isClickRedirect) {
     // Click the element and wait for navigation, then verify URL
     const locator = getLocator(context);
-    const urlPattern = new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
     // Check if the link might open in a new tab
     const targetAttr = await locator.getAttribute('target');
@@ -282,7 +304,7 @@ const handleUrl: ActionHandler = async (context) => {
     }
   } else {
     // Assert current URL matches (default behavior for assertions)
-    await expect(page).toHaveURL(new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await expect(page).toHaveURL(urlPattern);
   }
 };
 

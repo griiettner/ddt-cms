@@ -2,9 +2,15 @@
  * Settings Page Hook
  * Manages all data and logic for the Settings page
  */
-import { useState, type FormEvent } from 'react';
+import { useState, useCallback, type FormEvent } from 'react';
 import { useTypesQuery, useActionsQuery } from '@/hooks/queries';
-import { useCreateType, useCreateAction, useDeleteConfig } from '@/hooks/mutations';
+import {
+  useCreateType,
+  useCreateAction,
+  useDeleteConfig,
+  useReorderTypes,
+  useReorderActions,
+} from '@/hooks/mutations';
 import { useRelease } from '@/context/ReleaseContext';
 import type { ConfigOption, ConfigCategory } from '@/types/entities';
 
@@ -42,6 +48,8 @@ export interface UseSettingsPageReturn {
   updateFormField: (key: keyof SettingsFormData, value: string) => void;
   openDeleteConfirm: (id: number) => void;
   closeDeleteConfirm: () => void;
+  handleReorderTypes: (ids: number[]) => void;
+  handleReorderActions: (ids: number[]) => void;
 
   // Mutation states
   isSubmitting: boolean;
@@ -73,6 +81,8 @@ export function useSettingsPage(): UseSettingsPageReturn {
   const createTypeMutation = useCreateType(selectedReleaseId);
   const createActionMutation = useCreateAction(selectedReleaseId);
   const deleteMutation = useDeleteConfig(selectedReleaseId);
+  const reorderTypesMutation = useReorderTypes(selectedReleaseId);
+  const reorderActionsMutation = useReorderActions(selectedReleaseId);
 
   // Modal handlers
   function openAddModal(category: ConfigCategory): void {
@@ -148,6 +158,20 @@ export function useSettingsPage(): UseSettingsPageReturn {
     setDeleteConfirm({ open: false, id: null });
   }
 
+  const handleReorderTypes = useCallback(
+    (ids: number[]) => {
+      reorderTypesMutation.mutate(ids);
+    },
+    [reorderTypesMutation]
+  );
+
+  const handleReorderActions = useCallback(
+    (ids: number[]) => {
+      reorderActionsMutation.mutate(ids);
+    },
+    [reorderActionsMutation]
+  );
+
   return {
     // Data
     types,
@@ -171,6 +195,8 @@ export function useSettingsPage(): UseSettingsPageReturn {
     updateFormField,
     openDeleteConfirm,
     closeDeleteConfirm,
+    handleReorderTypes,
+    handleReorderActions,
 
     // Mutation states
     isSubmitting: createTypeMutation.isPending || createActionMutation.isPending,

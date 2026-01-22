@@ -146,6 +146,45 @@ export function useDeleteScenario(releaseId: number | string) {
   });
 }
 
+/**
+ * Reorder scenarios within a test case
+ */
+export function useReorderScenarios(releaseId: number | string) {
+  const queryClient = useQueryClient();
+  const id = Number(releaseId);
+
+  return useMutation({
+    mutationFn: ({ testCaseId, scenarioIds }: { testCaseId: number; scenarioIds: number[] }) =>
+      testCasesApi.reorderScenarios(id, testCaseId, scenarioIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['scenarios', id],
+      });
+    },
+  });
+}
+
+/**
+ * Reorder test cases within a test set
+ */
+export function useReorderCases(releaseId: number | string) {
+  const queryClient = useQueryClient();
+  const id = Number(releaseId);
+
+  return useMutation({
+    mutationFn: ({ testSetId, caseIds }: { testSetId: number; caseIds: number[] }) =>
+      testCasesApi.reorderCases(id, testSetId, caseIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['scenarios', id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['testCases', id],
+      });
+    },
+  });
+}
+
 export default {
   useCreateTestCase,
   useUpdateTestCase,
@@ -153,4 +192,6 @@ export default {
   useCreateScenario,
   useUpdateScenario,
   useDeleteScenario,
+  useReorderScenarios,
+  useReorderCases,
 };

@@ -205,6 +205,12 @@ export const testCasesApi = {
   deleteScenario(releaseId: number, scenarioId: number) {
     return api.delete(`/test-cases/scenarios/${releaseId}/${scenarioId}`);
   },
+  reorderScenarios(releaseId: number, testCaseId: number, scenarioIds: number[]) {
+    return api.put(`/test-cases/scenarios/${releaseId}/reorder`, { testCaseId, scenarioIds });
+  },
+  reorderCases(releaseId: number, testSetId: number, caseIds: number[]) {
+    return api.put(`/test-cases/${releaseId}/reorder`, { testSetId, caseIds });
+  },
 };
 
 export const testStepsApi = {
@@ -241,6 +247,12 @@ export const configApi = {
   },
   delete(releaseId: number, id: number) {
     return api.delete(`/config/${releaseId}/${id}`);
+  },
+  reorderTypes(releaseId: number, ids: number[]) {
+    return api.put(`/config/${releaseId}/type/reorder`, { ids });
+  },
+  reorderActions(releaseId: number, ids: number[]) {
+    return api.put(`/config/${releaseId}/action/reorder`, { ids });
   },
 };
 

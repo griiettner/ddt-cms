@@ -354,6 +354,53 @@ router.post(
   }
 );
 
+// PUT /api/config/:releaseId/:category/reorder - Reorder options
+interface ReorderBody {
+  ids: number[];
+}
+
+router.put(
+  '/:releaseId/:category/reorder',
+  (
+    req: Request<CategoryParams, unknown, ReorderBody>,
+    res: Response<ApiResponse<undefined>>
+  ): void => {
+    const { category, releaseId } = req.params;
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ success: false, error: 'IDs array is required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      db.transaction(() => {
+        const stmt = db.prepare(
+          'UPDATE configuration_options SET order_index = ? WHERE id = ? AND category = ?'
+        );
+        ids.forEach((id, index) => {
+          stmt.run(index, id, category);
+        });
+      })();
+
+      logAudit({
+        req,
+        action: 'UPDATE',
+        resourceType: `config_${category}`,
+        releaseId: releaseId,
+        details: { reordered: ids.length },
+      });
+
+      res.json({ success: true, data: undefined });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 // DELETE /api/config/:releaseId/:id - Delete option
 router.delete(
   '/:releaseId/:id',

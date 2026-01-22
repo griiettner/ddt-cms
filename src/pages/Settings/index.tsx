@@ -52,6 +52,8 @@ function Settings(): JSX.Element {
     updateFormField,
     openDeleteConfirm,
     closeDeleteConfirm,
+    handleReorderTypes,
+    handleReorderActions,
 
     // Mutation states
     isSubmitting,
@@ -108,11 +110,13 @@ function Settings(): JSX.Element {
                 types={types}
                 onAddClick={openAddModal}
                 onDeleteClick={openDeleteConfirm}
+                onReorder={handleReorderTypes}
               />
               <ActionsSection
                 actions={actions}
                 onAddClick={openAddModal}
                 onDeleteClick={openDeleteConfirm}
+                onReorder={handleReorderActions}
               />
             </div>
           )}

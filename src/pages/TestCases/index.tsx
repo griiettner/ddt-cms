@@ -70,6 +70,8 @@ function TestCases(): JSX.Element {
     handleSelectScenario,
     toggleCase,
     handleUpdateScenarioName,
+    handleReorderScenarios,
+    handleReorderCases,
 
     // Case modal
     handleOpenCaseModal,
@@ -208,6 +210,8 @@ function TestCases(): JSX.Element {
         onEditCase={handleEditCase}
         onDeleteCase={handleDeleteCase}
         onSaveAsReusable={handleSaveAsReusable}
+        onReorderScenarios={handleReorderScenarios}
+        onReorderCases={handleReorderCases}
       />
 
       <div className="main-editor">
