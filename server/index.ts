@@ -187,7 +187,7 @@ app.use(errorHandler);
 
 app.listen(PORT, (): void => {
   console.log('=== SERVER READY ===');
-  console.log(`Test Builder server running on port ${PORT}`);
+  console.log(`UAT DDT CMS server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Serve Static: ${process.env.SERVE_STATIC || 'false'}`);
   console.log('Waiting for requests...');

@@ -1,5 +1,5 @@
 /**
- * API Service for Test Builder
+ * API Service for UAT DDT CMS
  * Centralized HTTP client with error handling
  */
 

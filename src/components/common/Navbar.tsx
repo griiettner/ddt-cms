@@ -45,9 +45,9 @@ function Navbar(): JSX.Element {
       <div className="flex flex-1 items-center gap-8">
         <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-90">
           <div className="rounded-lg bg-white p-1.5">
-            <img src={logo} alt="Test Builder" className="h-8 w-auto" />
+            <img src={logo} alt="UAT DDT CMS" className="h-8 w-auto" />
           </div>
-          <span className="text-xl font-bold tracking-tight">Test Builder</span>
+          <span className="text-xl font-bold tracking-tight">UAT DDT CMS</span>
         </Link>
         <div className="flex items-center gap-1">
           {hasRelease ? (
