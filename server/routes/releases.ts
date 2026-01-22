@@ -435,10 +435,11 @@ router.patch(
     const db = getDb();
 
     try {
-      const release = db.prepare('SELECT status FROM releases WHERE id = ?').get(req.params.id) as
-        | ReleaseRow
-        | undefined;
-      if (!release) {
+      // Fetch the old release data for audit logging
+      const oldRelease = db
+        .prepare('SELECT release_number, description, notes, status FROM releases WHERE id = ?')
+        .get(req.params.id) as ReleaseRow | undefined;
+      if (!oldRelease) {
         res.status(404).json({ success: false, error: 'Release not found' });
         return;
       }
@@ -469,18 +470,30 @@ router.patch(
 
       db.prepare(query).run(...params);
 
+      // Build old and new value objects for changed fields only
+      const oldValue: Record<string, unknown> = {};
+      const newValue: Record<string, unknown> = {};
+      if (release_number !== undefined && release_number !== oldRelease.release_number) {
+        oldValue.release_number = oldRelease.release_number;
+        newValue.release_number = release_number;
+      }
+      if (description !== undefined && description !== oldRelease.description) {
+        oldValue.description = oldRelease.description;
+        newValue.description = description;
+      }
+      if (notes !== undefined && notes !== oldRelease.notes) {
+        oldValue.notes = oldRelease.notes;
+        newValue.notes = notes;
+      }
+
       logAudit({
         req,
         action: 'UPDATE',
         resourceType: 'release',
         resourceId: parseInt(req.params.id),
-        resourceName: release_number,
-        details: {
-          fields: Object.keys({ release_number, description, notes }).filter(
-            (k) =>
-              (({ release_number, description, notes }) as Record<string, unknown>)[k] !== undefined
-          ),
-        },
+        resourceName: release_number || oldRelease.release_number,
+        oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+        newValue: Object.keys(newValue).length > 0 ? newValue : null,
       });
 
       res.json({ success: true });

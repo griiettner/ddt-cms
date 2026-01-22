@@ -220,6 +220,8 @@ export interface AuditLog {
   resource_name: string | null;
   release_id: number | null;
   details: Record<string, unknown> | null;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
 }
 
 export interface AuditLogFilters {

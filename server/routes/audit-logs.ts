@@ -117,9 +117,17 @@ router.get(
       // Get paginated results
       const logs = db.prepare(query).all(...params, limitNum, offset) as AuditLogRow[];
 
+      // Parse JSON fields for each log entry
+      const parsedLogs = logs.map((log) => ({
+        ...log,
+        details: log.details ? JSON.parse(log.details) : null,
+        old_value: log.old_value ? JSON.parse(log.old_value) : null,
+        new_value: log.new_value ? JSON.parse(log.new_value) : null,
+      }));
+
       res.json({
         success: true,
-        data: logs,
+        data: parsedLogs,
         pagination: {
           total,
           page: pageNum,
@@ -130,12 +138,10 @@ router.get(
     } catch (err) {
       const error = err as Error;
       console.error('Error fetching audit logs:', error);
-      res
-        .status(500)
-        .json({
-          success: false,
-          error: error.message,
-        } as unknown as PaginatedApiResponse<AuditLogRow>);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      } as unknown as PaginatedApiResponse<AuditLogRow>);
     }
   }
 );

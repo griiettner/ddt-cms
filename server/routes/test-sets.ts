@@ -216,6 +216,16 @@ router.patch(
     try {
       const db = getDb();
 
+      // Fetch the old test set data for audit logging
+      const oldTestSet = db
+        .prepare('SELECT * FROM test_sets WHERE id = ? AND release_id = ?')
+        .get(req.params.id, req.params.releaseId) as TestSetRow | undefined;
+
+      if (!oldTestSet) {
+        res.status(404).json({ success: false, error: 'Test set not found' });
+        return;
+      }
+
       // Build dynamic update query
       const updates: string[] = [];
       const params: (string | number | null)[] = [];
@@ -249,6 +259,22 @@ router.patch(
         | undefined;
       const category = getCategoryInfo(updated?.category_id);
 
+      // Build old and new value objects for changed fields
+      const oldValue: Record<string, unknown> = {};
+      const newValue: Record<string, unknown> = {};
+      if (name !== undefined && name !== oldTestSet.name) {
+        oldValue.name = oldTestSet.name;
+        newValue.name = name;
+      }
+      if (description !== undefined && description !== oldTestSet.description) {
+        oldValue.description = oldTestSet.description;
+        newValue.description = description;
+      }
+      if (category_id !== undefined && category_id !== oldTestSet.category_id) {
+        oldValue.category_id = oldTestSet.category_id;
+        newValue.category_id = category_id;
+      }
+
       logAudit({
         req,
         action: 'UPDATE',
@@ -256,6 +282,8 @@ router.patch(
         resourceId: parseInt(req.params.id),
         resourceName: updated?.name,
         releaseId: req.params.releaseId,
+        oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+        newValue: Object.keys(newValue).length > 0 ? newValue : null,
       });
 
       res.json({ success: true, data: { ...updated, category } });

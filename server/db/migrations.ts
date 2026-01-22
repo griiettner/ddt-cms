@@ -384,6 +384,18 @@ const runMigrations = (db: DatabaseInstance): void => {
     if (!testRunStepsColumnNames.includes('expected_results')) {
       db.exec('ALTER TABLE test_run_steps ADD COLUMN expected_results TEXT');
     }
+
+    // Migration: Add old_value and new_value columns to audit_logs for change tracking
+    const auditLogsColumns = db.prepare('PRAGMA table_info(audit_logs)').all() as TableColumnInfo[];
+    const auditLogsColumnNames: string[] = auditLogsColumns.map((c) => c.name);
+
+    if (!auditLogsColumnNames.includes('old_value')) {
+      db.exec('ALTER TABLE audit_logs ADD COLUMN old_value TEXT');
+    }
+
+    if (!auditLogsColumnNames.includes('new_value')) {
+      db.exec('ALTER TABLE audit_logs ADD COLUMN new_value TEXT');
+    }
   } catch (err) {
     const error = err as Error;
     console.error('Migration warning (non-fatal):', error.message);

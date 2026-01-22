@@ -25,6 +25,8 @@ interface AuditLogParams {
   resourceName?: string | null;
   releaseId?: number | string | null;
   details?: Record<string, unknown>;
+  oldValue?: Record<string, unknown> | null;
+  newValue?: Record<string, unknown> | null;
 }
 
 /**
@@ -39,8 +41,9 @@ export const logAudit = (params: AuditLogParams): void => {
       `
       INSERT INTO audit_logs (
         user_eid, user_name, action, resource_type, resource_id,
-        resource_name, release_id, details, ip_address, user_agent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        resource_name, release_id, details, ip_address, user_agent,
+        old_value, new_value
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     ).run(
       user?.eid || 'anonymous',
@@ -52,7 +55,9 @@ export const logAudit = (params: AuditLogParams): void => {
       params.releaseId !== undefined ? Number(params.releaseId) : null,
       params.details ? JSON.stringify(params.details) : null,
       params.req.ip || params.req.socket.remoteAddress || null,
-      params.req.get('User-Agent') || null
+      params.req.get('User-Agent') || null,
+      params.oldValue ? JSON.stringify(params.oldValue) : null,
+      params.newValue ? JSON.stringify(params.newValue) : null
     );
   } catch (err) {
     // Log error but don't throw - audit logging should not break the main operation

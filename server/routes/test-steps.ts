@@ -75,6 +75,12 @@ router.patch(
 
     try {
       const db = getDb();
+
+      // Fetch the old step data for audit logging
+      const oldStep = db
+        .prepare('SELECT * FROM test_steps WHERE id = ? AND release_id = ?')
+        .get(id, releaseId) as Record<string, unknown> | undefined;
+
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
         .join(', ');
@@ -87,12 +93,31 @@ router.patch(
       const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ? AND release_id = ?`);
       stmt.run(...values, id, releaseId);
 
+      // Build old and new value objects for changed fields
+      const oldValue: Record<string, unknown> = {};
+      const newValue: Record<string, unknown> = {};
+      if (oldStep) {
+        for (const [key, newVal] of Object.entries(updates)) {
+          const oldVal = oldStep[key];
+          // Normalize boolean values for comparison
+          const normalizedOld = oldVal === 1 ? true : oldVal === 0 ? false : oldVal;
+          const normalizedNew = newVal;
+          if (JSON.stringify(normalizedOld) !== JSON.stringify(normalizedNew)) {
+            oldValue[key] = normalizedOld;
+            newValue[key] = normalizedNew;
+          }
+        }
+      }
+
       logAudit({
         req,
         action: 'UPDATE',
         resourceType: 'test_step',
         resourceId: parseInt(id),
+        resourceName: oldStep?.step_definition as string | undefined,
         releaseId: releaseId,
+        oldValue: Object.keys(oldValue).length > 0 ? oldValue : null,
+        newValue: Object.keys(newValue).length > 0 ? newValue : null,
       });
 
       res.json({ success: true });

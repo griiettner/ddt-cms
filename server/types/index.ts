@@ -244,6 +244,8 @@ export interface AuditLogRow {
   details: string | null;
   ip_address: string | null;
   user_agent: string | null;
+  old_value: string | null;
+  new_value: string | null;
 }
 
 // Environment configuration for Playwright test execution

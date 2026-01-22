@@ -2,9 +2,11 @@
  * Audit Logs Page
  * Displays audit log entries with filtering and pagination
  */
+import { useState } from 'react';
 import { useAuditLogsPage } from './hooks/useAuditLogsPage';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import Pagination from '@/components/common/Pagination';
+import type { AuditLog } from '@/types/entities';
 
 // Action badge colors
 const actionColors: Record<string, string> = {
@@ -25,6 +27,135 @@ function formatResourceType(type: string): string {
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
   return date.toLocaleString();
+}
+
+// Format field name for display
+function formatFieldName(field: string): string {
+  return field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Check if a field should be masked (sensitive data)
+function isSensitiveField(fieldName: string): boolean {
+  const sensitiveFields = ['password', 'secret', 'token', 'api_key', 'apikey', 'credential'];
+  return sensitiveFields.some((sf) => fieldName.toLowerCase().includes(sf));
+}
+
+// Check if the action type indicates a password action
+function isPasswordAction(actionValue: unknown): boolean {
+  if (typeof actionValue === 'string') {
+    return actionValue.toLowerCase() === 'password';
+  }
+  return false;
+}
+
+// Format value for display (with masking for sensitive fields)
+function formatValue(value: unknown, fieldName?: string, isSensitive?: boolean): string {
+  if (value === null || value === undefined) return '(empty)';
+  if (isSensitive || (fieldName && isSensitiveField(fieldName))) {
+    return '********';
+  }
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+// Component to display changes
+function ChangesDisplay({ log }: { log: AuditLog }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!log.old_value && !log.new_value) {
+    return <span className="text-co-gray-400">-</span>;
+  }
+
+  const oldValue = log.old_value || {};
+  const newValue = log.new_value || {};
+
+  // Check if the action field indicates this is a password-related change
+  const actionIsPassword = isPasswordAction(oldValue.action) || isPasswordAction(newValue.action);
+
+  // Get the element type for display (for test_step edits)
+  const elementType = (newValue.type || oldValue.type) as string | undefined;
+
+  // Get all keys that changed
+  const allKeys = new Set([...Object.keys(oldValue), ...Object.keys(newValue)]);
+  const changedFields: { field: string; old: unknown; new: unknown }[] = [];
+
+  allKeys.forEach((key) => {
+    const oldVal = oldValue[key];
+    const newVal = newValue[key];
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      changedFields.push({ field: key, old: oldVal, new: newVal });
+    }
+  });
+
+  if (changedFields.length === 0) {
+    return <span className="text-co-gray-400">-</span>;
+  }
+
+  // Check if action_result field should be masked (when action is password)
+  const shouldMaskActionResult = actionIsPassword;
+
+  return (
+    <div>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1 text-xs font-medium text-co-blue hover:text-co-blue-hover"
+      >
+        <span>
+          {changedFields.length} field{changedFields.length > 1 ? 's' : ''} changed
+        </span>
+        {elementType && (
+          <span className="ml-1 rounded bg-co-gray-200 px-1.5 py-0.5 text-[10px] font-normal text-co-gray-600">
+            {elementType}
+          </span>
+        )}
+        <svg
+          className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isExpanded && (
+        <div className="mt-2 space-y-1 rounded border border-co-gray-200 bg-co-gray-50 p-2 text-xs">
+          {changedFields.map(({ field, old, new: newVal }) => {
+            // Determine if this field's value should be masked
+            const isMasked =
+              isSensitiveField(field) || (field === 'action_result' && shouldMaskActionResult);
+
+            return (
+              <div key={field} className="flex flex-col gap-0.5">
+                <span className="font-medium text-co-gray-700">{formatFieldName(field)}:</span>
+                <div className="ml-2 flex items-center gap-2">
+                  <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700 line-through">
+                    {formatValue(old, field, isMasked)}
+                  </span>
+                  <svg
+                    className="text-co-gray-400 h-3 w-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M13 7l5 5m0 0l-5 5m5-5H6"
+                    />
+                  </svg>
+                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-700">
+                    {formatValue(newVal, field, isMasked)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AuditLogsPage() {
@@ -188,6 +319,7 @@ export function AuditLogsPage() {
                     <th>Action</th>
                     <th>Resource Type</th>
                     <th>Resource Name</th>
+                    <th>Changes</th>
                     <th>Release ID</th>
                   </tr>
                 </thead>
@@ -216,6 +348,9 @@ export function AuditLogsPage() {
                         {formatResourceType(log.resource_type)}
                       </td>
                       <td className="text-sm text-co-gray-900">{log.resource_name || '-'}</td>
+                      <td className="text-sm">
+                        <ChangesDisplay log={log} />
+                      </td>
                       <td className="text-sm text-co-gray-500">{log.release_id || '-'}</td>
                     </tr>
                   ))}
