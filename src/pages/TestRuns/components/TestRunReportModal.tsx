@@ -201,16 +201,6 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Test Run Report" size="fullscreen">
       <div className="mx-auto flex h-full max-w-7xl flex-col gap-6">
-        {/* Video Section */}
-        {hasVideo && (
-          <div className="shrink-0">
-            <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Test Recording</h3>
-            <div className="aspect-video max-h-[400px] overflow-hidden rounded-lg border border-co-gray-200 bg-black">
-              <VideoPlayer testRunId={run.id} />
-            </div>
-          </div>
-        )}
-
         {/* Summary Header */}
         <div className="shrink-0 rounded-lg bg-co-gray-50 p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -305,13 +295,25 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
         {/* Step Results */}
         {!isLoading && !error && (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
             {groupedSteps.length === 0 ? (
-              <div className="rounded-lg bg-co-gray-50 p-8 text-center text-co-gray-500">
-                No step results available for this test run.
-              </div>
+              <>
+                <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
+                <div className="rounded-lg bg-co-gray-50 p-8 text-center text-co-gray-500">
+                  No step results available for this test run.
+                </div>
+              </>
             ) : (
               <div className="space-y-4">
+                {/* Video Section */}
+                {hasVideo && (
+                  <div className="shrink-0">
+                    <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Test Recording</h3>
+                    <div className="aspect-video max-h-[400px] overflow-hidden rounded-lg border border-co-gray-200 bg-black">
+                      <VideoPlayer testRunId={run.id} />
+                    </div>
+                  </div>
+                )}
+                <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
                 {groupedSteps.map((caseGroup) => (
                   <div key={caseGroup.caseName} className="rounded-lg border border-co-gray-200">
                     {/* Case Header */}
