@@ -9,7 +9,7 @@ export default tseslint.config(
   ...tseslint.configs.strict,
   ...tseslint.configs.stylistic,
   {
-    ignores: ['dist/**', 'node_modules/**', 'temp/**', '*.config.js', '*.config.ts'],
+    ignores: ['dist/**', 'node_modules/**', 'temp/**', 'tests/reports/**', '*.config.js', '*.config.ts'],
   },
   // Frontend config
   {

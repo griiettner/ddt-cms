@@ -617,6 +617,11 @@ router.post(
         return;
       }
 
+      // Get release number for reports
+      const release = db
+        .prepare('SELECT release_number FROM releases WHERE id = ?')
+        .get(releaseId) as { release_number: string } | undefined;
+
       // Create test run record
       const result = db
         .prepare(
@@ -642,6 +647,7 @@ router.post(
         testRunId,
         testSetId: parseInt(testSetId, 10),
         releaseId,
+        releaseNumber: release?.release_number,
         baseUrl: envConfig.value,
       });
 
@@ -810,6 +816,11 @@ router.post(
         return;
       }
 
+      // Get release number for reports
+      const release = db
+        .prepare('SELECT release_number FROM releases WHERE id = ?')
+        .get(releaseId) as { release_number: string } | undefined;
+
       // Generate batch ID upfront so we can store it with test runs
       const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       const executedBy = req.user?.eid || null;
@@ -820,6 +831,7 @@ router.post(
         testSetId: number;
         testSetName: string;
         releaseId: number;
+        releaseNumber?: string;
         baseUrl: string;
       }[] = [];
 
@@ -845,6 +857,7 @@ router.post(
           testSetId: testSet.id,
           testSetName: testSet.name,
           releaseId,
+          releaseNumber: release?.release_number,
           baseUrl: envConfig.value,
         });
       }
@@ -1036,31 +1049,172 @@ router.get(
   }
 );
 
+// Media file info type
+interface MediaFile {
+  type: 'video' | 'screenshot';
+  filename: string;
+  path: string;
+  stepId?: number;
+  scenarioId?: number;
+  size: number;
+}
+
+interface MediaFilesResponse {
+  video: MediaFile | null;
+  screenshots: MediaFile[];
+}
+
+// GET /api/test-runs/:id/media - List media files for a test run
+router.get(
+  '/:id/media',
+  (req: Request<IdParams>, res: Response<ApiResponse<MediaFilesResponse>>): void => {
+    const { id } = req.params;
+
+    try {
+      const runDir = path.join(process.cwd(), 'tests', 'reports', 'results', `run-${id}`);
+
+      // Check if directory exists
+      if (!fs.existsSync(runDir)) {
+        res.json({
+          success: true,
+          data: { video: null, screenshots: [] },
+        });
+        return;
+      }
+
+      let video: MediaFile | null = null;
+      const screenshots: MediaFile[] = [];
+
+      // Check for video file
+      const videoPath = path.join(runDir, 'video.webm');
+      if (fs.existsSync(videoPath)) {
+        const stats = fs.statSync(videoPath);
+        video = {
+          type: 'video',
+          filename: 'video.webm',
+          path: `/api/test-runs/${id}/video`,
+          size: stats.size,
+        };
+      }
+
+      // Check for screenshots directory
+      const screenshotsDir = path.join(runDir, 'screenshots');
+      if (fs.existsSync(screenshotsDir)) {
+        const files = fs.readdirSync(screenshotsDir);
+        for (const file of files) {
+          if (file.endsWith('.png')) {
+            const filePath = path.join(screenshotsDir, file);
+            const stats = fs.statSync(filePath);
+
+            // Parse filename: failure-{scenarioId}-step-{stepId}.png
+            const match = file.match(/failure-(\d+)-step-(\d+)\.png/);
+            const scenarioId = match ? parseInt(match[1], 10) : undefined;
+            const stepId = match ? parseInt(match[2], 10) : undefined;
+
+            screenshots.push({
+              type: 'screenshot',
+              filename: file,
+              path: `/api/test-runs/${id}/screenshot/${file}`,
+              stepId,
+              scenarioId,
+              size: stats.size,
+            });
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        data: { video, screenshots },
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Media list error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// GET /api/test-runs/:id/screenshot/:filename - Serve screenshot file
+router.get(
+  '/:id/screenshot/:filename',
+  (req: Request<IdParams & { filename: string }>, res: Response): void => {
+    const { id, filename } = req.params;
+
+    try {
+      // Validate filename to prevent directory traversal
+      if (filename.includes('..') || filename.includes('/')) {
+        res.status(400).json({ success: false, error: 'Invalid filename' });
+        return;
+      }
+
+      const screenshotPath = path.join(
+        process.cwd(),
+        'tests',
+        'reports',
+        'results',
+        `run-${id}`,
+        'screenshots',
+        filename
+      );
+
+      if (!fs.existsSync(screenshotPath)) {
+        res.status(404).json({ success: false, error: 'Screenshot not found' });
+        return;
+      }
+
+      const stat = fs.statSync(screenshotPath);
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Content-Length': stat.size,
+      });
+      fs.createReadStream(screenshotPath).pipe(res);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Screenshot error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 // GET /api/test-runs/:id/video - Stream video file for test run
 router.get('/:id/video', (req: Request<IdParams>, res: Response): void => {
   const { id } = req.params;
 
   try {
-    const db = getRegistryDb();
-    const run = db.prepare('SELECT video_path FROM test_runs WHERE id = ?').get(id) as
-      | { video_path: string | null }
-      | undefined;
+    // First, try the new location (per-run directory)
+    let videoPath = path.join(
+      process.cwd(),
+      'tests',
+      'reports',
+      'results',
+      `run-${id}`,
+      'video.webm'
+    );
 
-    if (!run || !run.video_path) {
-      res.status(404).json({ success: false, error: 'Video not found for this test run' });
-      return;
-    }
-
-    // Resolve video path (handle both absolute and relative paths)
-    let videoPath = run.video_path;
-    if (!path.isAbsolute(videoPath)) {
-      videoPath = path.join(process.cwd(), videoPath);
-    }
-
-    // Check if file exists
+    // If not found, check the database for the stored path (legacy location)
     if (!fs.existsSync(videoPath)) {
-      res.status(404).json({ success: false, error: 'Video file not found on disk' });
-      return;
+      const db = getRegistryDb();
+      const run = db.prepare('SELECT video_path FROM test_runs WHERE id = ?').get(id) as
+        | { video_path: string | null }
+        | undefined;
+
+      if (!run || !run.video_path) {
+        res.status(404).json({ success: false, error: 'Video not found for this test run' });
+        return;
+      }
+
+      // Resolve video path (handle both absolute and relative paths)
+      videoPath = run.video_path;
+      if (!path.isAbsolute(videoPath)) {
+        videoPath = path.join(process.cwd(), videoPath);
+      }
+
+      // Check if file exists
+      if (!fs.existsSync(videoPath)) {
+        res.status(404).json({ success: false, error: 'Video file not found on disk' });
+        return;
+      }
     }
 
     // Get file stats

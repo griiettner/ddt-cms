@@ -10,3 +10,11 @@ test-results/
 tests/generated/*
 !tests/generated/.gitkeep
 playwright-report/
+
+# Test Reports
+tests/reports/results/*
+!tests/reports/results/.gitkeep
+tests/reports/html/*
+!tests/reports/html/.gitkeep
+tests/reports/bdd/*
+!tests/reports/bdd/.gitkeep

@@ -68,6 +68,7 @@ export interface StepResult {
   expectedResults: string | null;
   status: 'passed' | 'failed' | 'skipped';
   errorMessage?: string;
+  screenshotPath?: string; // Path to failure screenshot
   durationMs: number;
 }
 

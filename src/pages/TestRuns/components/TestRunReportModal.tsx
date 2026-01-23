@@ -1,11 +1,33 @@
 /**
  * TestRunReportModal - Shows detailed step-by-step test report in fullscreen
+ * Features:
+ * - Two tabs: Report and Media
+ * - Media tab is lazy loaded (content only loads when tab is active)
+ * - Scroll happens inside the tab body
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Modal, ErrorDisplay } from '@/components/common';
 import type { TestRun } from '@/types/entities';
 import type { TestRunStepResult, TestRunStatusResponse } from '@/services/api';
 import { testExecutionApi } from '@/services/api';
+
+// Media file type from API
+interface MediaFile {
+  type: 'video' | 'screenshot';
+  filename: string;
+  path: string;
+  stepId?: number;
+  scenarioId?: number;
+  size: number;
+}
+
+interface MediaFilesResponse {
+  video: MediaFile | null;
+  screenshots: MediaFile[];
+}
+
+// Tab types
+type TabId = 'report' | 'media';
 
 // Video player component
 function VideoPlayer({ testRunId }: { testRunId: number }) {
@@ -83,8 +105,228 @@ function VideoPlayer({ testRunId }: { testRunId: number }) {
   );
 }
 
+// Screenshot gallery component
+function ScreenshotGallery({
+  screenshots,
+  steps,
+}: {
+  screenshots: MediaFile[];
+  steps: TestRunStepResult[];
+}) {
+  const [selectedImage, setSelectedImage] = useState<MediaFile | null>(null);
+
+  // Create a map of step info by stepId for quick lookup
+  const stepInfoMap = new Map<number, TestRunStepResult>();
+  for (const step of steps) {
+    if (step.test_step_id) {
+      stepInfoMap.set(step.test_step_id, step);
+    }
+  }
+
+  if (screenshots.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-co-gray-500">
+        <svg
+          className="text-co-gray-400 mb-3 h-12 w-12"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+        <p>No failure screenshots available</p>
+        <p className="mt-1 text-sm">Screenshots are captured when steps fail</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        {screenshots.map((screenshot) => {
+          const stepInfo = screenshot.stepId ? stepInfoMap.get(screenshot.stepId) : null;
+          return (
+            <div
+              key={screenshot.filename}
+              className="group cursor-pointer overflow-hidden rounded-lg border border-co-gray-200 bg-white transition-shadow hover:shadow-lg"
+              onClick={() => setSelectedImage(screenshot)}
+            >
+              <div className="aspect-video bg-co-gray-100">
+                <img
+                  src={screenshot.path}
+                  alt={`Failure screenshot ${screenshot.filename}`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div className="p-2">
+                <p className="truncate text-xs font-medium text-co-gray-700">
+                  {stepInfo?.step_definition || screenshot.filename}
+                </p>
+                {stepInfo && (
+                  <p className="mt-0.5 truncate text-xs text-co-gray-500">
+                    {stepInfo.scenario_name}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Lightbox Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-h-[90vh] max-w-[90vw]">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute -right-4 -top-4 rounded-full bg-white p-2 text-co-gray-600 shadow-lg hover:bg-co-gray-100"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+            <img
+              src={selectedImage.path}
+              alt="Failure screenshot"
+              className="max-h-[90vh] max-w-[90vw] rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// Media tab content - lazy loaded
+function MediaTabContent({ testRunId, steps }: { testRunId: number; steps: TestRunStepResult[] }) {
+  const [media, setMedia] = useState<MediaFilesResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMedia = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/test-runs/${testRunId}/media`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch media files');
+        }
+        const result = (await response.json()) as { success: boolean; data: MediaFilesResponse };
+        if (result.success) {
+          setMedia(result.data);
+        }
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMedia();
+  }, [testRunId]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <svg className="h-8 w-8 animate-spin text-co-blue" viewBox="0 0 24 24">
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            fill="none"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+        <span className="ml-3 text-co-gray-500">Loading media files...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-red-700">
+        {error}
+      </div>
+    );
+  }
+
+  const hasVideo = media?.video !== null;
+  const hasScreenshots = media?.screenshots && media.screenshots.length > 0;
+
+  if (!hasVideo && !hasScreenshots) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-co-gray-500">
+        <svg
+          className="text-co-gray-400 mb-3 h-12 w-12"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+          />
+        </svg>
+        <p>No media files available for this test run</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Video Section */}
+      {hasVideo && (
+        <div>
+          <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Test Recording</h3>
+          <div className="aspect-video max-h-[400px] overflow-hidden rounded-lg border border-co-gray-200 bg-black">
+            <VideoPlayer testRunId={testRunId} />
+          </div>
+        </div>
+      )}
+
+      {/* Screenshots Section */}
+      <div>
+        <h3 className="mb-3 text-lg font-semibold text-co-gray-900">
+          Failure Screenshots
+          {hasScreenshots && (
+            <span className="ml-2 text-sm font-normal text-co-gray-500">
+              ({media?.screenshots.length} images)
+            </span>
+          )}
+        </h3>
+        <ScreenshotGallery screenshots={media?.screenshots || []} steps={steps} />
+      </div>
+    </div>
+  );
+}
+
 // Custom hook for fetching test run status
-function useTestRunStatus(_runId: number | null) {
+function useTestRunStatus(runId: number) {
   const [data, setData] = useState<TestRunStatusResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,13 +347,7 @@ function useTestRunStatus(_runId: number | null) {
     }
   }, []);
 
-  const reset = useCallback(() => {
-    setData(null);
-    setError(null);
-    setIsLoading(false);
-  }, []);
-
-  return { data, isLoading, error, fetchStatus, reset };
+  return { data, isLoading, error, fetchStatus, runId };
 }
 
 interface TestRunReportModalProps {
@@ -175,93 +411,164 @@ function groupStepsByCaseAndScenario(steps: TestRunStepResult[]): GroupedStep[] 
   return result;
 }
 
-function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): JSX.Element | null {
-  const {
-    data: statusData,
-    isLoading,
-    error,
-    fetchStatus,
-    reset,
-  } = useTestRunStatus(run?.id ?? null);
+// Tab button component
+function TabButton({
+  id,
+  label,
+  icon,
+  isActive,
+  onClick,
+}: {
+  id: TabId;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  onClick: (id: TabId) => void;
+}) {
+  return (
+    <button
+      onClick={() => onClick(id)}
+      className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+        isActive
+          ? 'border-co-blue text-co-blue'
+          : 'border-transparent text-co-gray-500 hover:border-co-gray-300 hover:text-co-gray-700'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
+// Inner component to handle modal content with key-based reset
+function TestRunReportModalContent({ run, onClose }: { run: TestRun; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState<TabId>('report');
+  const [mediaTabLoaded, setMediaTabLoaded] = useState(false);
+
+  const { data: statusData, isLoading, error, fetchStatus } = useTestRunStatus(run.id);
+
+  // Fetch status on mount
   useEffect(() => {
-    if (isOpen && run) {
-      fetchStatus(run.id);
-    } else {
-      reset();
-    }
-  }, [isOpen, run, fetchStatus, reset]);
+    fetchStatus(run.id);
+  }, [run.id, fetchStatus]);
 
-  if (!isOpen || !run) return null;
+  // Handle tab change - mark media as loaded when switching to media tab
+  const handleTabChange = useCallback(
+    (tabId: TabId) => {
+      setActiveTab(tabId);
+      if (tabId === 'media' && !mediaTabLoaded) {
+        setMediaTabLoaded(true);
+      }
+    },
+    [mediaTabLoaded]
+  );
 
   const steps = statusData?.steps || [];
   const groupedSteps = groupStepsByCaseAndScenario(steps);
-  const hasVideo = run.video_path !== null && run.video_path !== undefined;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Test Run Report" size="fullscreen">
-      <div className="mx-auto flex h-full max-w-7xl flex-col gap-6">
-        {/* Summary Header */}
-        <div className="shrink-0 rounded-lg bg-co-gray-50 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h4 className="font-semibold text-co-blue">
-                {run.test_set_name || `Test Set #${run.test_set_id}`}
-              </h4>
-              {run.environment && (
-                <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
-                  {run.environment}
-                </span>
-              )}
-            </div>
-            <span
-              className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                run.status === 'passed'
-                  ? 'bg-green-100 text-green-700'
-                  : run.status === 'failed'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-yellow-100 text-yellow-700'
-              }`}
-            >
-              {run.status?.toUpperCase()}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-            <div>
-              <span className="text-co-gray-500">Duration:</span>
-              <span className="ml-2 font-medium">{formatDuration(run.duration_ms)}</span>
-            </div>
-            <div>
-              <span className="text-co-gray-500">Executed:</span>
-              <span className="ml-2">{formatDate(run.executed_at)}</span>
-            </div>
-            <div>
-              <span className="text-co-gray-500">Run By:</span>
-              <span className="ml-2">{run.executed_by || 'System'}</span>
-            </div>
-            <div>
-              <span className="text-co-gray-500">Total Steps:</span>
-              <span className="ml-2 font-medium">{run.total_steps || 0}</span>
-            </div>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-            <div>
-              <span className="text-green-600">Passed:</span>
-              <span className="ml-2 font-medium text-green-600">{run.passed_steps || 0}</span>
-            </div>
-            <div>
-              <span className="text-red-600">Failed:</span>
-              <span className="ml-2 font-medium text-red-600">{run.failed_steps || 0}</span>
-            </div>
-            {run.base_url && (
-              <div className="col-span-2">
-                <span className="text-co-gray-500">Base URL:</span>
-                <span className="ml-2 font-mono text-xs">{run.base_url}</span>
-              </div>
+    <div className="mx-auto flex h-full max-w-7xl flex-col">
+      {/* Summary Header */}
+      <div className="shrink-0 rounded-lg bg-co-gray-50 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h4 className="font-semibold text-co-blue">
+              {run.test_set_name || `Test Set #${run.test_set_id}`}
+            </h4>
+            {run.environment && (
+              <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                {run.environment}
+              </span>
             )}
           </div>
+          <span
+            className={`rounded-full px-3 py-1 text-sm font-semibold ${
+              run.status === 'passed'
+                ? 'bg-green-100 text-green-700'
+                : run.status === 'failed'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-yellow-100 text-yellow-700'
+            }`}
+          >
+            {run.status?.toUpperCase()}
+          </span>
         </div>
+        <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+          <div>
+            <span className="text-co-gray-500">Duration:</span>
+            <span className="ml-2 font-medium">{formatDuration(run.duration_ms)}</span>
+          </div>
+          <div>
+            <span className="text-co-gray-500">Executed:</span>
+            <span className="ml-2">{formatDate(run.executed_at)}</span>
+          </div>
+          <div>
+            <span className="text-co-gray-500">Run By:</span>
+            <span className="ml-2">{run.executed_by || 'System'}</span>
+          </div>
+          <div>
+            <span className="text-co-gray-500">Total Steps:</span>
+            <span className="ml-2 font-medium">{run.total_steps || 0}</span>
+          </div>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+          <div>
+            <span className="text-green-600">Passed:</span>
+            <span className="ml-2 font-medium text-green-600">{run.passed_steps || 0}</span>
+          </div>
+          <div>
+            <span className="text-red-600">Failed:</span>
+            <span className="ml-2 font-medium text-red-600">{run.failed_steps || 0}</span>
+          </div>
+          {run.base_url && (
+            <div className="col-span-2">
+              <span className="text-co-gray-500">Base URL:</span>
+              <span className="ml-2 font-mono text-xs">{run.base_url}</span>
+            </div>
+          )}
+        </div>
+      </div>
 
+      {/* Tabs */}
+      <div className="mt-4 shrink-0 border-b border-co-gray-200">
+        <div className="flex gap-4">
+          <TabButton
+            id="report"
+            label="Report"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            }
+            isActive={activeTab === 'report'}
+            onClick={handleTabChange}
+          />
+          <TabButton
+            id="media"
+            label="Media"
+            icon={
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+            }
+            isActive={activeTab === 'media'}
+            onClick={handleTabChange}
+          />
+        </div>
+      </div>
+
+      {/* Tab Content - Scrollable */}
+      <div className="min-h-0 flex-1 overflow-y-auto py-4">
         {/* Loading State */}
         {isLoading && (
           <div className="flex items-center justify-center py-12">
@@ -292,9 +599,9 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
           </div>
         )}
 
-        {/* Step Results */}
-        {!isLoading && !error && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Report Tab */}
+        {!isLoading && !error && activeTab === 'report' && (
+          <>
             {groupedSteps.length === 0 ? (
               <>
                 <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
@@ -304,16 +611,7 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
               </>
             ) : (
               <div className="space-y-4">
-                {/* Video Section */}
-                {hasVideo && (
-                  <div className="shrink-0">
-                    <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Test Recording</h3>
-                    <div className="aspect-video max-h-[400px] overflow-hidden rounded-lg border border-co-gray-200 bg-black">
-                      <VideoPlayer testRunId={run.id} />
-                    </div>
-                  </div>
-                )}
-                <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
+                <h3 className="text-lg font-semibold text-co-gray-900">Step Results</h3>
                 {groupedSteps.map((caseGroup) => (
                   <div key={caseGroup.caseName} className="rounded-lg border border-co-gray-200">
                     {/* Case Header */}
@@ -436,18 +734,34 @@ function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): 
                 ))}
               </div>
             )}
-          </div>
+          </>
         )}
 
-        {/* Footer */}
-        <div className="shrink-0 border-t border-co-gray-200 pt-4">
-          <div className="flex justify-end">
-            <button onClick={onClose} className="btn-primary">
-              Close
-            </button>
-          </div>
+        {/* Media Tab - Lazy Loaded */}
+        {!isLoading && !error && activeTab === 'media' && mediaTabLoaded && (
+          <MediaTabContent testRunId={run.id} steps={steps} />
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="shrink-0 border-t border-co-gray-200 pt-4">
+        <div className="flex justify-end">
+          <button onClick={onClose} className="btn-primary">
+            Close
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TestRunReportModal({ isOpen, onClose, run }: TestRunReportModalProps): JSX.Element | null {
+  if (!isOpen || !run) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Test Run Report" size="fullscreen">
+      {/* Key forces re-mount when run changes, resetting all state */}
+      <TestRunReportModalContent key={run.id} run={run} onClose={onClose} />
     </Modal>
   );
 }

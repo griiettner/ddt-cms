@@ -25,7 +25,8 @@
     "check": "npm run typecheck && npm run lint && npm run format:check",
     "prepare": "husky",
     "test": "npx playwright test",
-    "test:run": "npx tsx tests/runner.ts"
+    "test:run": "npx tsx tests/runner.ts",
+    "test:report": "npx playwright show-report tests/reports/html"
   },
   "keywords": [
     "cms",
@@ -58,6 +59,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^12.6.0",
     "@eslint/js": "^9.39.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
@@ -74,6 +76,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "multiple-cucumber-html-reporter": "^3.9.3",
     "nodemon": "^3.0.3",
     "postcss": "^8.5.6",
     "prettier": "^3.8.0",

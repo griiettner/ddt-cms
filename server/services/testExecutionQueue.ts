@@ -17,6 +17,7 @@ interface QueueItem {
   testRunId: number;
   testSetId: number;
   releaseId: number;
+  releaseNumber?: string;
   baseUrl: string;
   addedAt: Date;
 }
@@ -190,6 +191,7 @@ class TestExecutionQueue extends EventEmitter {
         TEST_RUN_ID: String(item.testRunId),
         TEST_SET_ID: String(item.testSetId),
         RELEASE_ID: String(item.releaseId),
+        RELEASE_NUMBER: item.releaseNumber || '',
         TEST_BASE_URL: item.baseUrl,
         API_BASE_URL: `http://localhost:${serverPort}`,
       };

@@ -21,6 +21,7 @@ interface BatchItem {
   testSetId: number;
   testSetName: string;
   releaseId: number;
+  releaseNumber?: string;
   baseUrl: string;
 }
 
@@ -196,6 +197,7 @@ class ParallelTestExecution extends EventEmitter {
         TEST_RUN_ID: String(item.testRunId),
         TEST_SET_ID: String(item.testSetId),
         RELEASE_ID: String(item.releaseId),
+        RELEASE_NUMBER: item.releaseNumber || '',
         TEST_BASE_URL: item.baseUrl,
         API_BASE_URL: `http://localhost:${serverPort}`,
         PLAYWRIGHT_WORKERS: '1', // Each test set runs with 1 worker

@@ -1,11 +1,13 @@
 /**
  * Playwright Test Runner Entry Point
  * Executes tests based on test data from the database
+ * Generates Cucumber/BDD reports for test results
  */
 import { chromium, type Browser, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { executeStep } from './fixtures/actionHandlers.js';
+import { generateAllReports } from './fixtures/cucumberReporter.js';
 import type {
   TestData,
   TestRunResult,
@@ -19,11 +21,22 @@ import type {
 const TEST_RUN_ID = process.env.TEST_RUN_ID;
 const TEST_SET_ID = process.env.TEST_SET_ID;
 const RELEASE_ID = process.env.RELEASE_ID;
+const RELEASE_NUMBER = process.env.RELEASE_NUMBER;
 const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
 
-// Video storage directory (will be created if it doesn't exist)
-const VIDEO_DIR = path.join(process.cwd(), 'test-results', 'videos');
+// Report directories
+const REPORTS_DIR = path.join(process.cwd(), 'tests', 'reports');
+const RESULTS_DIR = path.join(REPORTS_DIR, 'results');
+
+// Per-run directory for media (videos, screenshots)
+function getRunDir(testRunId: string): string {
+  return path.join(RESULTS_DIR, `run-${testRunId}`);
+}
+
+function getScreenshotsDir(testRunId: string): string {
+  return path.join(getRunDir(testRunId), 'screenshots');
+}
 
 /**
  * Fetch test data from the API
@@ -72,9 +85,14 @@ async function runTests(): Promise<TestRunResult> {
   let page: Page | null = null;
 
   try {
-    // Ensure video directory exists
-    if (!fs.existsSync(VIDEO_DIR)) {
-      fs.mkdirSync(VIDEO_DIR, { recursive: true });
+    // Ensure run directory exists for media files
+    const runDir = getRunDir(TEST_RUN_ID || '0');
+    const screenshotsDir = getScreenshotsDir(TEST_RUN_ID || '0');
+    if (!fs.existsSync(runDir)) {
+      fs.mkdirSync(runDir, { recursive: true });
+    }
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
     }
 
     // Fetch test data
@@ -112,7 +130,7 @@ async function runTests(): Promise<TestRunResult> {
     context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
       recordVideo: {
-        dir: VIDEO_DIR,
+        dir: runDir,
         size: { width: 1280, height: 720 },
       },
     });
@@ -182,8 +200,12 @@ async function runTests(): Promise<TestRunResult> {
 
             // Take screenshot on failure
             try {
-              const screenshotPath = `test-results/failure-${scenario.id}-step-${step.id}.png`;
+              const screenshotPath = path.join(
+                screenshotsDir,
+                `failure-${scenario.id}-step-${step.id}.png`
+              );
               await page.screenshot({ path: screenshotPath });
+              stepResult.screenshotPath = screenshotPath;
               console.log(`      Screenshot saved: ${screenshotPath}`);
             } catch (screenshotErr) {
               console.error(`      Failed to save screenshot:`, screenshotErr);
@@ -228,12 +250,11 @@ async function runTests(): Promise<TestRunResult> {
           console.log(`Video file size: ${stats.size} bytes`);
 
           if (stats.size > 0) {
-            // Rename to a predictable path based on test run ID
-            const finalVideoName = `test-run-${TEST_RUN_ID}.webm`;
-            const finalVideoPath = path.join(VIDEO_DIR, finalVideoName);
+            // Rename to a predictable path in the run directory
+            const finalVideoPath = path.join(runDir, 'video.webm');
 
-            // Copy to final location
-            fs.copyFileSync(originalPath, finalVideoPath);
+            // Rename (move) to final location
+            fs.renameSync(originalPath, finalVideoPath);
             videoPath = finalVideoPath;
             console.log(`Video saved to: ${finalVideoPath}`);
           } else {
@@ -285,11 +306,27 @@ async function main(): Promise<void> {
   console.log(`Test Run ID: ${TEST_RUN_ID}`);
   console.log(`Test Set ID: ${TEST_SET_ID}`);
   console.log(`Release ID: ${RELEASE_ID}`);
+  console.log(`Release Number: ${RELEASE_NUMBER || 'N/A'}`);
   console.log(`Base URL: ${TEST_BASE_URL}`);
   console.log('');
 
+  // Store test set name for reports
+  let testSetName = 'Unknown Test Set';
+
   try {
     const result = await runTests();
+
+    // Try to get test set name from test data
+    try {
+      const testDataUrl = `${API_BASE_URL}/api/test-generation/${TEST_SET_ID}?releaseId=${RELEASE_ID}`;
+      const response = await fetch(testDataUrl);
+      if (response.ok) {
+        const data = (await response.json()) as { data?: { testSetName: string } };
+        testSetName = data.data?.testSetName || testSetName;
+      }
+    } catch {
+      // Ignore - use default name
+    }
 
     console.log('');
     console.log('=== Test Results ===');
@@ -298,6 +335,25 @@ async function main(): Promise<void> {
     console.log(`Total Steps: ${result.totalSteps}`);
     console.log(`Passed: ${result.passedSteps}`);
     console.log(`Failed: ${result.failedSteps}`);
+
+    // Generate reports (Cucumber JSON, HTML)
+    if (TEST_RUN_ID && result.steps.length > 0) {
+      console.log('');
+      console.log('=== Generating Reports ===');
+      try {
+        const reportPaths = await generateAllReports(
+          result,
+          testSetName,
+          parseInt(TEST_RUN_ID, 10),
+          RELEASE_NUMBER
+        );
+        console.log(`JSON Results: ${reportPaths.jsonPath}`);
+        console.log(`Cucumber JSON: ${reportPaths.cucumberPath}`);
+        console.log(`HTML Report: ${reportPaths.htmlPath}`);
+      } catch (reportErr) {
+        console.error('Failed to generate reports:', reportErr);
+      }
+    }
 
     // Output result for queue service to capture
     console.log(`RESULT:${JSON.stringify(result)}`);
