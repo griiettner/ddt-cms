@@ -10,7 +10,7 @@
 #
 # Optional:
 #   --env, -e           Environment name (default: qa)
-#   --api-url, -a       API base URL (default: http://localhost:3000)
+#   --api-url, -a       API base URL (default: http://localhost:<PORT from .env>)
 #   --poll-interval     Polling interval in seconds (default: 5)
 #   --timeout           Max wait time in seconds (default: 3600)
 #   --quiet, -q         Suppress progress output
@@ -26,8 +26,21 @@
 
 set -e
 
+# Get script directory to find .env file
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Read PORT from .env file if it exists
+DEFAULT_PORT=3000
+if [ -f "$PROJECT_DIR/.env" ]; then
+    ENV_PORT=$(grep -E "^PORT=" "$PROJECT_DIR/.env" | cut -d'=' -f2 | tr -d ' \r')
+    if [ -n "$ENV_PORT" ]; then
+        DEFAULT_PORT="$ENV_PORT"
+    fi
+fi
+
 # Default values
-API_URL="http://localhost:3000"
+API_URL="http://localhost:${DEFAULT_PORT}"
 POLL_INTERVAL=5
 TIMEOUT=3600
 QUIET=false
