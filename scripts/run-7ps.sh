@@ -134,7 +134,100 @@ done
 
 # Check for required commands
 command -v curl >/dev/null 2>&1 || { print_error "curl is required but not installed."; exit 1; }
-command -v jq >/dev/null 2>&1 || { print_error "jq is required but not installed."; exit 1; }
+command -v node >/dev/null 2>&1 || { print_error "node is required but not installed."; exit 1; }
+
+# JSON parsing helper using Node.js (replaces jq dependency)
+# Usage: json_get "$JSON_STRING" "path.to.value" "default_value"
+json_get() {
+    local json="$1"
+    local jpath="$2"
+    local default="${3:-}"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathParts = process.argv[2].split(".");
+        let result = data;
+        for (const key of pathParts) {
+            if (result === null || result === undefined) break;
+            result = result[key];
+        }
+        const val = (result === null || result === undefined) ? (process.argv[3] || "") : result;
+        console.log(val);
+    ' "$json" "$jpath" "$default" 2>/dev/null || echo "$default"
+}
+
+# JSON array helper - finds item by field value
+# Usage: json_find "$JSON_STRING" "data" "release_number" "2.1.1" "id"
+json_find() {
+    local json="$1"
+    local array_path="$2"
+    local search_field="$3"
+    local search_value="$4"
+    local return_field="$5"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const arr = process.argv[2].split(".").reduce((obj, key) => obj && obj[key], data) || [];
+        const item = arr.find(i => i[process.argv[3]] === process.argv[4]);
+        console.log(item ? item[process.argv[5]] : "");
+    ' "$json" "$array_path" "$search_field" "$search_value" "$return_field" 2>/dev/null || echo ""
+}
+
+# JSON array formatter for listing releases
+json_list_releases() {
+    local json="$1"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        (data.data || []).slice(0, 10).forEach(r => {
+            console.log("  - " + r.release_number + " (ID: " + r.id + ", Status: " + r.status + ")");
+        });
+    ' "$json" 2>/dev/null
+}
+
+# JSON array join helper
+json_join() {
+    local json="$1"
+    local jpath="$2"
+    local separator="${3:-, }"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathParts = process.argv[2].split(".");
+        let result = data;
+        for (const key of pathParts) {
+            if (result === null || result === undefined) break;
+            result = result[key];
+        }
+        console.log(Array.isArray(result) ? result.join(process.argv[3]) : "");
+    ' "$json" "$jpath" "$separator" 2>/dev/null || echo ""
+}
+
+# JSON pretty print helper
+json_pretty() {
+    local json="$1"
+    local jpath="${2:-}"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathStr = process.argv[2];
+        let result = data;
+        if (pathStr) {
+            for (const key of pathStr.split(".")) {
+                if (result === null || result === undefined) break;
+                result = result[key];
+            }
+        }
+        console.log(JSON.stringify(result, null, 2));
+    ' "$json" "$jpath" 2>/dev/null
+}
+
+# JSON test runs formatter
+json_format_test_runs() {
+    local json="$1"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const testRuns = data.data && data.data.testRuns ? data.data.testRuns : [];
+        testRuns.forEach(r => {
+            console.log([r.testSetName, r.status, r.passedSteps, r.failedSteps, r.totalSteps, r.durationMs].join("|"));
+        });
+    ' "$json" 2>/dev/null
+}
 
 # Remove trailing slash from API_URL
 API_URL="${API_URL%/}"
@@ -152,8 +245,8 @@ if [ -z "$RELEASE" ]; then
     LATEST_RESPONSE=$(curl -s "${API_URL}/api/releases/latest-active")
 
     # Check if request succeeded
-    if [ "$(echo "$LATEST_RESPONSE" | jq -r '.success // false')" != "true" ]; then
-        ERROR_MSG=$(echo "$LATEST_RESPONSE" | jq -r '.error // "Unknown error"')
+    if [ "$(json_get "$LATEST_RESPONSE" "success" "false")" != "true" ]; then
+        ERROR_MSG=$(json_get "$LATEST_RESPONSE" "error" "Unknown error")
         echo ""
         print_error "No active release found!"
         echo ""
@@ -167,8 +260,8 @@ if [ -z "$RELEASE" ]; then
         exit 1
     fi
 
-    RELEASE=$(echo "$LATEST_RESPONSE" | jq -r '.data.release_number')
-    RELEASE_ID=$(echo "$LATEST_RESPONSE" | jq -r '.data.id')
+    RELEASE=$(json_get "$LATEST_RESPONSE" "data.release_number")
+    RELEASE_ID=$(json_get "$LATEST_RESPONSE" "data.id")
 
     print_success "Using latest active release: ${CYAN}${RELEASE}${NC} (ID: $RELEASE_ID)"
     echo ""
@@ -179,20 +272,20 @@ else
     RELEASE_RESPONSE=$(curl -s "${API_URL}/api/releases?search=${RELEASE}&limit=100")
 
     # Check if request succeeded
-    if [ "$(echo "$RELEASE_RESPONSE" | jq -r '.success // false')" != "true" ]; then
+    if [ "$(json_get "$RELEASE_RESPONSE" "success" "false")" != "true" ]; then
         print_error "Failed to fetch releases from API"
         exit 1
     fi
 
     # Find exact match for release number
-    RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r --arg rel "$RELEASE" '.data[] | select(.release_number == $rel) | .id' | head -1)
+    RELEASE_ID=$(json_find "$RELEASE_RESPONSE" "data" "release_number" "$RELEASE" "id")
 
     if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
         echo ""
         print_error "Release '$RELEASE' not found!"
         echo ""
         echo -e "${YELLOW}Available releases:${NC}"
-        echo "$RELEASE_RESPONSE" | jq -r '.data[] | "  - \(.release_number) (ID: \(.id), Status: \(.status))"' | head -10
+        json_list_releases "$RELEASE_RESPONSE"
         echo ""
         exit 1
     fi
@@ -212,9 +305,9 @@ START_RESPONSE=$(curl -s -X POST \
     -d "{\"releaseId\": ${RELEASE_ID}, \"environment\": \"${ENVIRONMENT}\"}")
 
 # Check if request succeeded
-SUCCESS=$(echo "$START_RESPONSE" | jq -r '.success // false')
+SUCCESS=$(json_get "$START_RESPONSE" "success" "false")
 if [ "$SUCCESS" != "true" ]; then
-    ERROR_MSG=$(echo "$START_RESPONSE" | jq -r '.error // "Unknown error"')
+    ERROR_MSG=$(json_get "$START_RESPONSE" "error" "Unknown error")
 
     # Check if it's an environment configuration error
     if echo "$ERROR_MSG" | grep -qi "not configured"; then
@@ -236,9 +329,9 @@ if [ "$SUCCESS" != "true" ]; then
 fi
 
 # Extract batch info
-BATCH_ID=$(echo "$START_RESPONSE" | jq -r '.data.batchId')
-TOTAL_SETS=$(echo "$START_RESPONSE" | jq -r '.data.totalSets')
-TEST_RUN_IDS=$(echo "$START_RESPONSE" | jq -r '.data.testRunIds | join(", ")')
+BATCH_ID=$(json_get "$START_RESPONSE" "data.batchId")
+TOTAL_SETS=$(json_get "$START_RESPONSE" "data.totalSets")
+TEST_RUN_IDS=$(json_join "$START_RESPONSE" "data.testRunIds" ", ")
 
 print_success "Batch execution started!"
 print_info "Batch ID: ${PURPLE}${BATCH_ID}${NC}"
@@ -266,17 +359,17 @@ while true; do
     STATUS_RESPONSE=$(curl -s "${API_URL}/api/test-runs/batch/${BATCH_ID}/status")
 
     # Check if we got a valid response
-    if [ -z "$STATUS_RESPONSE" ] || [ "$(echo "$STATUS_RESPONSE" | jq -r '.success // false')" != "true" ]; then
+    if [ -z "$STATUS_RESPONSE" ] || [ "$(json_get "$STATUS_RESPONSE" "success" "false")" != "true" ]; then
         print_warning "Failed to get status, retrying..."
         sleep "$POLL_INTERVAL"
         continue
     fi
 
     # Extract status info
-    BATCH_STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.data.status // "unknown"')
-    COMPLETED_SETS=$(echo "$STATUS_RESPONSE" | jq -r '.data.completedSets // 0')
-    PASSED_SETS=$(echo "$STATUS_RESPONSE" | jq -r '.data.passedSets // 0')
-    FAILED_SETS=$(echo "$STATUS_RESPONSE" | jq -r '.data.failedSets // 0')
+    BATCH_STATUS=$(json_get "$STATUS_RESPONSE" "data.status" "unknown")
+    COMPLETED_SETS=$(json_get "$STATUS_RESPONSE" "data.completedSets" "0")
+    PASSED_SETS=$(json_get "$STATUS_RESPONSE" "data.passedSets" "0")
+    FAILED_SETS=$(json_get "$STATUS_RESPONSE" "data.failedSets" "0")
 
     # Build progress string
     PROGRESS_MSG="Status: ${BATCH_STATUS} | Completed: ${COMPLETED_SETS}/${TOTAL_SETS} | Passed: ${PASSED_SETS} | Failed: ${FAILED_SETS} | Elapsed: ${ELAPSED}s"
@@ -302,25 +395,25 @@ print_info "Fetching final results..."
 
 DETAILS_RESPONSE=$(curl -s "${API_URL}/api/test-runs/batch/${BATCH_ID}/details")
 
-if [ "$(echo "$DETAILS_RESPONSE" | jq -r '.success // false')" != "true" ]; then
+if [ "$(json_get "$DETAILS_RESPONSE" "success" "false")" != "true" ]; then
     print_error "Failed to fetch batch details"
     exit 1
 fi
 
 # Extract final results
-FINAL_STATUS=$(echo "$DETAILS_RESPONSE" | jq -r '.data.status')
-RELEASE_NUMBER=$(echo "$DETAILS_RESPONSE" | jq -r '.data.releaseNumber')
-TOTAL_DURATION_MS=$(echo "$DETAILS_RESPONSE" | jq -r '.data.totalDurationMs // 0')
+FINAL_STATUS=$(json_get "$DETAILS_RESPONSE" "data.status")
+RELEASE_NUMBER=$(json_get "$DETAILS_RESPONSE" "data.releaseNumber")
+TOTAL_DURATION_MS=$(json_get "$DETAILS_RESPONSE" "data.totalDurationMs" "0")
 TOTAL_DURATION_SEC=$((TOTAL_DURATION_MS / 1000))
-PASSED_SETS=$(echo "$DETAILS_RESPONSE" | jq -r '.data.passedSets')
-FAILED_SETS=$(echo "$DETAILS_RESPONSE" | jq -r '.data.failedSets')
-COMPLETED_SETS=$(echo "$DETAILS_RESPONSE" | jq -r '.data.completedSets')
-STARTED_AT=$(echo "$DETAILS_RESPONSE" | jq -r '.data.startedAt')
-COMPLETED_AT=$(echo "$DETAILS_RESPONSE" | jq -r '.data.completedAt')
+PASSED_SETS=$(json_get "$DETAILS_RESPONSE" "data.passedSets")
+FAILED_SETS=$(json_get "$DETAILS_RESPONSE" "data.failedSets")
+COMPLETED_SETS=$(json_get "$DETAILS_RESPONSE" "data.completedSets")
+STARTED_AT=$(json_get "$DETAILS_RESPONSE" "data.startedAt")
+COMPLETED_AT=$(json_get "$DETAILS_RESPONSE" "data.completedAt")
 
 # Output JSON if requested
 if [ "$JSON_OUTPUT" = true ]; then
-    echo "$DETAILS_RESPONSE" | jq '.data'
+    json_pretty "$DETAILS_RESPONSE" "data"
     exit 0
 fi
 
@@ -354,7 +447,7 @@ echo "              TEST SET DETAILS"
 echo "----------------------------------------------"
 echo ""
 
-echo "$DETAILS_RESPONSE" | jq -r '.data.testRuns[] | "\(.testSetName)|\(.status)|\(.passedSteps)|\(.failedSteps)|\(.totalSteps)|\(.durationMs)"' | while IFS='|' read -r name status passed failed total duration; do
+json_format_test_runs "$DETAILS_RESPONSE" | while IFS='|' read -r name status passed failed total duration; do
     duration_sec=$((duration / 1000))
 
     if [ "$status" = "passed" ]; then
