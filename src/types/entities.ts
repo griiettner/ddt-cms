@@ -200,6 +200,7 @@ export interface TestRun {
   environment: string | null;
   base_url: string | null;
   video_path: string | null;
+  pdf_path?: string | null; // For PDF report storage (local path or S3 URL)
   batch_id?: string | null; // For 7PS batch runs
   batch_size?: number | null; // Number of test sets in batch
 }

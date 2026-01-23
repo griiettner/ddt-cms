@@ -407,6 +407,11 @@ const runMigrations = (db: DatabaseInstance): void => {
       db.exec('ALTER TABLE test_runs ADD COLUMN batch_id VARCHAR(100)');
       db.exec('CREATE INDEX IF NOT EXISTS idx_test_runs_batch ON test_runs(batch_id)');
     }
+
+    // Migration: Add pdf_path column to test_runs for PDF report storage
+    if (!testRunsColumnNames.includes('pdf_path')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN pdf_path TEXT');
+    }
   } catch (err) {
     const error = err as Error;
     console.error('Migration warning (non-fatal):', error.message);

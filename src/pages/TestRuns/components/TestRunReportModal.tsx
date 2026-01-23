@@ -2,7 +2,9 @@
  * TestRunReportModal - Shows detailed step-by-step test report in fullscreen
  * Features:
  * - Two tabs: Report and Media
+ * - Cases displayed as collapsible accordions
  * - Media tab is lazy loaded (content only loads when tab is active)
+ * - PDF report generation and download
  * - Scroll happens inside the tab body
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -28,6 +30,9 @@ interface MediaFilesResponse {
 
 // Tab types
 type TabId = 'report' | 'media';
+
+// PDF generation state
+type PdfState = 'idle' | 'generating' | 'ready' | 'error';
 
 // Video player component
 function VideoPlayer({ testRunId }: { testRunId: number }) {
@@ -440,10 +445,341 @@ function TabButton({
   );
 }
 
+// Case Accordion Component
+function CaseAccordion({
+  caseName,
+  scenarios,
+  defaultExpanded = false,
+}: {
+  caseName: string;
+  scenarios: { scenarioName: string; steps: TestRunStepResult[] }[];
+  defaultExpanded?: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+  // Count passed/failed for this case
+  let passedCount = 0;
+  let failedCount = 0;
+  for (const scenario of scenarios) {
+    for (const step of scenario.steps) {
+      if (step.status === 'passed') passedCount++;
+      else if (step.status === 'failed') failedCount++;
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-co-gray-200">
+      {/* Case Header - Clickable */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="bg-co-blue-50 hover:bg-co-blue-100 flex w-full items-center justify-between px-4 py-3 text-left transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <svg
+            className={`h-4 w-4 text-co-blue transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <h5 className="font-semibold text-co-blue">{caseName}</h5>
+        </div>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="font-medium text-green-600">{passedCount} passed</span>
+          {failedCount > 0 && (
+            <span className="font-medium text-red-600">{failedCount} failed</span>
+          )}
+        </div>
+      </button>
+
+      {/* Case Content - Collapsible */}
+      {isExpanded && (
+        <div className="divide-y divide-co-gray-100">
+          {scenarios.map((scenario) => (
+            <div key={scenario.scenarioName} className="p-4">
+              <h6 className="mb-3 text-sm font-medium text-co-gray-700">{scenario.scenarioName}</h6>
+
+              {/* Steps */}
+              <div className="space-y-2">
+                {scenario.steps.map((step, idx) => (
+                  <div
+                    key={step.id || idx}
+                    className={`rounded-lg p-3 ${
+                      step.status === 'passed'
+                        ? 'bg-green-50'
+                        : step.status === 'failed'
+                          ? 'bg-red-50'
+                          : 'bg-yellow-50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Status Icon */}
+                      <div className="mt-0.5 flex-shrink-0">
+                        {step.status === 'passed' ? (
+                          <svg
+                            className="h-5 w-5 text-green-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        ) : step.status === 'failed' ? (
+                          <svg
+                            className="h-5 w-5 text-red-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="h-5 w-5 text-yellow-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            />
+                          </svg>
+                        )}
+                      </div>
+
+                      {/* Step Content */}
+                      <div className="min-w-0 flex-1">
+                        {/* Step Definition */}
+                        <div
+                          className={`text-sm font-medium ${
+                            step.status === 'passed'
+                              ? 'text-green-700'
+                              : step.status === 'failed'
+                                ? 'text-red-700'
+                                : 'text-yellow-700'
+                          }`}
+                        >
+                          {step.step_definition || `Step ${idx + 1}`}
+                        </div>
+
+                        {/* Expected Results */}
+                        {step.expected_results && (
+                          <div className="mt-1 text-xs text-co-gray-600">
+                            <span className="font-medium">Expected:</span> {step.expected_results}
+                          </div>
+                        )}
+
+                        {/* Duration */}
+                        <div className="mt-1 text-xs text-co-gray-500">
+                          Duration: {formatDuration(step.duration_ms)}
+                        </div>
+
+                        {/* Error Message */}
+                        {step.error_message && (
+                          <div className="mt-2">
+                            <ErrorDisplay error={step.error_message} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// PDF Generation Modal
+function PdfGenerationModal({
+  isOpen,
+  onClose,
+  testRunId,
+  testSetName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  testRunId: number;
+  testSetName: string;
+}) {
+  const [pdfState, setPdfState] = useState<PdfState>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const generatePdf = useCallback(async () => {
+    setPdfState('generating');
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/test-runs/${testRunId}/pdf`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error || 'Failed to generate PDF');
+      }
+
+      setPdfState('ready');
+    } catch (err) {
+      setError((err as Error).message);
+      setPdfState('error');
+    }
+  }, [testRunId]);
+
+  // Start generation when modal opens
+  useEffect(() => {
+    if (isOpen && pdfState === 'idle') {
+      generatePdf();
+    }
+  }, [isOpen, pdfState, generatePdf]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setPdfState('idle');
+      setError(null);
+    }
+  }, [isOpen]);
+
+  const handleDownload = () => {
+    window.open(`/api/test-runs/${testRunId}/pdf`, '_blank');
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+        <div className="text-center">
+          {pdfState === 'generating' && (
+            <>
+              <svg className="mx-auto h-12 w-12 animate-spin text-co-blue" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              <h3 className="mt-4 text-lg font-semibold text-co-gray-900">Generating PDF Report</h3>
+              <p className="mt-2 text-sm text-co-gray-500">
+                Please wait while we generate the PDF for {testSetName}...
+              </p>
+            </>
+          )}
+
+          {pdfState === 'ready' && (
+            <>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                <svg
+                  className="h-6 w-6 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-co-gray-900">PDF Ready!</h3>
+              <p className="mt-2 text-sm text-co-gray-500">
+                Your PDF report for {testSetName} has been generated.
+              </p>
+              <div className="mt-6 flex justify-center gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-co-gray-700 hover:text-co-gray-900"
+                >
+                  Cancel
+                </button>
+                <button onClick={handleDownload} className="btn-primary flex items-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                  Download PDF
+                </button>
+              </div>
+            </>
+          )}
+
+          {pdfState === 'error' && (
+            <>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <svg
+                  className="h-6 w-6 text-red-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-co-gray-900">Generation Failed</h3>
+              <p className="mt-2 text-sm text-red-600">{error}</p>
+              <div className="mt-6 flex justify-center gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-co-gray-700 hover:text-co-gray-900"
+                >
+                  Close
+                </button>
+                <button onClick={generatePdf} className="btn-primary">
+                  Try Again
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Inner component to handle modal content with key-based reset
 function TestRunReportModalContent({ run, onClose }: { run: TestRun; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<TabId>('report');
   const [mediaTabLoaded, setMediaTabLoaded] = useState(false);
+  const [showPdfModal, setShowPdfModal] = useState(false);
 
   const { data: statusData, isLoading, error, fetchStatus } = useTestRunStatus(run.id);
 
@@ -467,291 +803,206 @@ function TestRunReportModalContent({ run, onClose }: { run: TestRun; onClose: ()
   const groupedSteps = groupStepsByCaseAndScenario(steps);
 
   return (
-    <div className="mx-auto flex h-full max-w-7xl flex-col">
-      {/* Summary Header */}
-      <div className="shrink-0 rounded-lg bg-co-gray-50 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h4 className="font-semibold text-co-blue">
-              {run.test_set_name || `Test Set #${run.test_set_id}`}
-            </h4>
-            {run.environment && (
-              <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
-                {run.environment}
-              </span>
-            )}
-          </div>
-          <span
-            className={`rounded-full px-3 py-1 text-sm font-semibold ${
-              run.status === 'passed'
-                ? 'bg-green-100 text-green-700'
-                : run.status === 'failed'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-yellow-100 text-yellow-700'
-            }`}
-          >
-            {run.status?.toUpperCase()}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-          <div>
-            <span className="text-co-gray-500">Duration:</span>
-            <span className="ml-2 font-medium">{formatDuration(run.duration_ms)}</span>
-          </div>
-          <div>
-            <span className="text-co-gray-500">Executed:</span>
-            <span className="ml-2">{formatDate(run.executed_at)}</span>
-          </div>
-          <div>
-            <span className="text-co-gray-500">Run By:</span>
-            <span className="ml-2">{run.executed_by || 'System'}</span>
-          </div>
-          <div>
-            <span className="text-co-gray-500">Total Steps:</span>
-            <span className="ml-2 font-medium">{run.total_steps || 0}</span>
-          </div>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-          <div>
-            <span className="text-green-600">Passed:</span>
-            <span className="ml-2 font-medium text-green-600">{run.passed_steps || 0}</span>
-          </div>
-          <div>
-            <span className="text-red-600">Failed:</span>
-            <span className="ml-2 font-medium text-red-600">{run.failed_steps || 0}</span>
-          </div>
-          {run.base_url && (
-            <div className="col-span-2">
-              <span className="text-co-gray-500">Base URL:</span>
-              <span className="ml-2 font-mono text-xs">{run.base_url}</span>
+    <>
+      <div className="mx-auto flex h-full max-w-7xl flex-col">
+        {/* Summary Header */}
+        <div className="shrink-0 rounded-lg bg-co-gray-50 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h4 className="font-semibold text-co-blue">
+                {run.test_set_name || `Test Set #${run.test_set_id}`}
+              </h4>
+              {run.environment && (
+                <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                  {run.environment}
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="mt-4 shrink-0 border-b border-co-gray-200">
-        <div className="flex gap-4">
-          <TabButton
-            id="report"
-            label="Report"
-            icon={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            }
-            isActive={activeTab === 'report'}
-            onClick={handleTabChange}
-          />
-          <TabButton
-            id="media"
-            label="Media"
-            icon={
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-            }
-            isActive={activeTab === 'media'}
-            onClick={handleTabChange}
-          />
-        </div>
-      </div>
-
-      {/* Tab Content - Scrollable */}
-      <div className="min-h-0 flex-1 overflow-y-auto py-4">
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <svg className="h-8 w-8 animate-spin text-co-blue" viewBox="0 0 24 24">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-                fill="none"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span className="ml-3 text-co-gray-500">Loading report...</span>
+            <span
+              className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                run.status === 'passed'
+                  ? 'bg-green-100 text-green-700'
+                  : run.status === 'failed'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-yellow-100 text-yellow-700'
+              }`}
+            >
+              {run.status?.toUpperCase()}
+            </span>
           </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-red-700">
-            {error}
+          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <div>
+              <span className="text-co-gray-500">Duration:</span>
+              <span className="ml-2 font-medium">{formatDuration(run.duration_ms)}</span>
+            </div>
+            <div>
+              <span className="text-co-gray-500">Executed:</span>
+              <span className="ml-2">{formatDate(run.executed_at)}</span>
+            </div>
+            <div>
+              <span className="text-co-gray-500">Run By:</span>
+              <span className="ml-2">{run.executed_by || 'System'}</span>
+            </div>
+            <div>
+              <span className="text-co-gray-500">Total Steps:</span>
+              <span className="ml-2 font-medium">{run.total_steps || 0}</span>
+            </div>
           </div>
-        )}
-
-        {/* Report Tab */}
-        {!isLoading && !error && activeTab === 'report' && (
-          <>
-            {groupedSteps.length === 0 ? (
-              <>
-                <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
-                <div className="rounded-lg bg-co-gray-50 p-8 text-center text-co-gray-500">
-                  No step results available for this test run.
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-co-gray-900">Step Results</h3>
-                {groupedSteps.map((caseGroup) => (
-                  <div key={caseGroup.caseName} className="rounded-lg border border-co-gray-200">
-                    {/* Case Header */}
-                    <div className="bg-co-blue-50 rounded-t-lg px-4 py-2">
-                      <h5 className="font-semibold text-co-blue">{caseGroup.caseName}</h5>
-                    </div>
-
-                    {/* Scenarios */}
-                    <div className="divide-y divide-co-gray-100">
-                      {caseGroup.scenarios.map((scenario) => (
-                        <div key={scenario.scenarioName} className="p-4">
-                          <h6 className="mb-3 text-sm font-medium text-co-gray-700">
-                            {scenario.scenarioName}
-                          </h6>
-
-                          {/* Steps */}
-                          <div className="space-y-2">
-                            {scenario.steps.map((step, idx) => (
-                              <div
-                                key={step.id || idx}
-                                className={`rounded-lg p-3 ${
-                                  step.status === 'passed'
-                                    ? 'bg-green-50'
-                                    : step.status === 'failed'
-                                      ? 'bg-red-50'
-                                      : 'bg-yellow-50'
-                                }`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  {/* Status Icon */}
-                                  <div className="mt-0.5 flex-shrink-0">
-                                    {step.status === 'passed' ? (
-                                      <svg
-                                        className="h-5 w-5 text-green-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth="2"
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
-                                    ) : step.status === 'failed' ? (
-                                      <svg
-                                        className="h-5 w-5 text-red-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth="2"
-                                          d="M6 18L18 6M6 6l12 12"
-                                        />
-                                      </svg>
-                                    ) : (
-                                      <svg
-                                        className="h-5 w-5 text-yellow-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth="2"
-                                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                        />
-                                      </svg>
-                                    )}
-                                  </div>
-
-                                  {/* Step Content */}
-                                  <div className="min-w-0 flex-1">
-                                    {/* Step Definition */}
-                                    <div
-                                      className={`text-sm font-medium ${
-                                        step.status === 'passed'
-                                          ? 'text-green-700'
-                                          : step.status === 'failed'
-                                            ? 'text-red-700'
-                                            : 'text-yellow-700'
-                                      }`}
-                                    >
-                                      {step.step_definition || `Step ${idx + 1}`}
-                                    </div>
-
-                                    {/* Expected Results */}
-                                    {step.expected_results && (
-                                      <div className="mt-1 text-xs text-co-gray-600">
-                                        <span className="font-medium">Expected:</span>{' '}
-                                        {step.expected_results}
-                                      </div>
-                                    )}
-
-                                    {/* Duration */}
-                                    <div className="mt-1 text-xs text-co-gray-500">
-                                      Duration: {formatDuration(step.duration_ms)}
-                                    </div>
-
-                                    {/* Error Message */}
-                                    {step.error_message && (
-                                      <div className="mt-2">
-                                        <ErrorDisplay error={step.error_message} />
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <div>
+              <span className="text-green-600">Passed:</span>
+              <span className="ml-2 font-medium text-green-600">{run.passed_steps || 0}</span>
+            </div>
+            <div>
+              <span className="text-red-600">Failed:</span>
+              <span className="ml-2 font-medium text-red-600">{run.failed_steps || 0}</span>
+            </div>
+            {run.base_url && (
+              <div className="col-span-2">
+                <span className="text-co-gray-500">Base URL:</span>
+                <span className="ml-2 font-mono text-xs">{run.base_url}</span>
               </div>
             )}
-          </>
-        )}
+          </div>
+        </div>
 
-        {/* Media Tab - Lazy Loaded */}
-        {!isLoading && !error && activeTab === 'media' && mediaTabLoaded && (
-          <MediaTabContent testRunId={run.id} steps={steps} />
-        )}
-      </div>
+        {/* Tabs */}
+        <div className="mt-4 shrink-0 border-b border-co-gray-200">
+          <div className="flex gap-4">
+            <TabButton
+              id="report"
+              label="Report"
+              icon={
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              }
+              isActive={activeTab === 'report'}
+              onClick={handleTabChange}
+            />
+            <TabButton
+              id="media"
+              label="Media"
+              icon={
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
+                </svg>
+              }
+              isActive={activeTab === 'media'}
+              onClick={handleTabChange}
+            />
+          </div>
+        </div>
 
-      {/* Footer */}
-      <div className="shrink-0 border-t border-co-gray-200 pt-4">
-        <div className="flex justify-end">
-          <button onClick={onClose} className="btn-primary">
-            Close
-          </button>
+        {/* Tab Content - Scrollable */}
+        <div className="min-h-0 flex-1 overflow-y-auto py-4">
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <svg className="h-8 w-8 animate-spin text-co-blue" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              <span className="ml-3 text-co-gray-500">Loading report...</span>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Report Tab */}
+          {!isLoading && !error && activeTab === 'report' && (
+            <>
+              {groupedSteps.length === 0 ? (
+                <>
+                  <h3 className="mb-3 text-lg font-semibold text-co-gray-900">Step Results</h3>
+                  <div className="rounded-lg bg-co-gray-50 p-8 text-center text-co-gray-500">
+                    No step results available for this test run.
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-co-gray-900">Step Results</h3>
+                  {groupedSteps.map((caseGroup, index) => (
+                    <CaseAccordion
+                      key={caseGroup.caseName}
+                      caseName={caseGroup.caseName}
+                      scenarios={caseGroup.scenarios}
+                      defaultExpanded={index === 0} // First case expanded by default
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Media Tab - Lazy Loaded */}
+          {!isLoading && !error && activeTab === 'media' && mediaTabLoaded && (
+            <MediaTabContent testRunId={run.id} steps={steps} />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 border-t border-co-gray-200 pt-4">
+          <div className="flex justify-between">
+            {/* Download PDF Button - Left Side */}
+            <button
+              onClick={() => setShowPdfModal(true)}
+              className="flex items-center gap-2 rounded-lg border border-co-gray-300 bg-white px-4 py-2 text-sm font-medium text-co-gray-700 transition-colors hover:bg-co-gray-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Download PDF
+            </button>
+
+            {/* Close Button - Right Side */}
+            <button onClick={onClose} className="btn-primary">
+              Close
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* PDF Generation Modal */}
+      <PdfGenerationModal
+        isOpen={showPdfModal}
+        onClose={() => setShowPdfModal(false)}
+        testRunId={run.id}
+        testSetName={run.test_set_name || `Test Set #${run.test_set_id}`}
+      />
+    </>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   parallelTestExecution,
   type BatchExecutionStatus,
 } from '../services/parallelTestExecution.js';
+import { generatePdfReport, getPdfPath } from '../services/pdfGenerator.js';
 
 const router: Router = express.Router();
 
@@ -1172,6 +1173,124 @@ router.get(
     } catch (err) {
       const error = err as Error;
       console.error('Screenshot error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// POST /api/test-runs/:id/pdf - Generate PDF report for a test run
+router.post(
+  '/:id/pdf',
+  async (
+    req: Request<IdParams>,
+    res: Response<ApiResponse<{ pdfPath: string }>>
+  ): Promise<void> => {
+    const { id } = req.params;
+
+    try {
+      const testRunId = parseInt(id, 10);
+      if (isNaN(testRunId)) {
+        res.status(400).json({ success: false, error: 'Invalid test run ID' });
+        return;
+      }
+
+      // Check if test run exists
+      const db = getDb();
+      const run = db.prepare('SELECT id FROM test_runs WHERE id = ?').get(testRunId);
+      if (!run) {
+        res.status(404).json({ success: false, error: 'Test run not found' });
+        return;
+      }
+
+      // Generate PDF
+      const result = await generatePdfReport(testRunId);
+
+      if (result.success && result.pdfPath) {
+        res.json({ success: true, data: { pdfPath: result.pdfPath } });
+      } else {
+        res.status(500).json({ success: false, error: result.error || 'Failed to generate PDF' });
+      }
+    } catch (err) {
+      const error = err as Error;
+      console.error('PDF generation error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// GET /api/test-runs/:id/pdf - Download PDF report for a test run
+router.get('/:id/pdf', async (req: Request<IdParams>, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const testRunId = parseInt(id, 10);
+    if (isNaN(testRunId)) {
+      res.status(400).json({ success: false, error: 'Invalid test run ID' });
+      return;
+    }
+
+    // Get existing PDF path or check if it exists
+    const pdfPath = await getPdfPath(testRunId);
+
+    if (!pdfPath) {
+      res
+        .status(404)
+        .json({ success: false, error: 'PDF not found. Generate it first using POST.' });
+      return;
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(pdfPath)) {
+      res.status(404).json({ success: false, error: 'PDF file not found on disk' });
+      return;
+    }
+
+    // Get file stats
+    const stat = fs.statSync(pdfPath);
+
+    // Set headers for PDF download
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': stat.size,
+      'Content-Disposition': `attachment; filename="test-run-${id}-report.pdf"`,
+    });
+
+    // Stream the file
+    fs.createReadStream(pdfPath).pipe(res);
+  } catch (err) {
+    const error = err as Error;
+    console.error('PDF download error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/test-runs/:id/pdf/status - Check if PDF exists for a test run
+router.get(
+  '/:id/pdf/status',
+  async (
+    req: Request<IdParams>,
+    res: Response<ApiResponse<{ exists: boolean; pdfPath: string | null }>>
+  ): Promise<void> => {
+    const { id } = req.params;
+
+    try {
+      const testRunId = parseInt(id, 10);
+      if (isNaN(testRunId)) {
+        res.status(400).json({ success: false, error: 'Invalid test run ID' });
+        return;
+      }
+
+      const pdfPath = await getPdfPath(testRunId);
+      res.json({
+        success: true,
+        data: {
+          exists: pdfPath !== null,
+          pdfPath,
+        },
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('PDF status error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }
