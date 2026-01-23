@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { LoadingSpinner, ConfirmModal } from '@/components/common';
 import { useTestSetsPage } from './hooks/useTestSetsPage';
 import {
@@ -6,9 +7,12 @@ import {
   TestSetFormModal,
   CategoryTree,
   CategoryFormModal,
+  Run7PSModal,
 } from './components';
 
 function TestSets(): JSX.Element {
+  const [is7PSModalOpen, setIs7PSModalOpen] = useState(false);
+
   const {
     testSets,
     pagination,
@@ -58,7 +62,11 @@ function TestSets(): JSX.Element {
 
   return (
     <div className="mx-auto max-w-7xl p-8">
-      <TestSetsHeader onCreateClick={openCreateModal} />
+      <TestSetsHeader
+        onCreateClick={openCreateModal}
+        onRun7PSClick={() => setIs7PSModalOpen(true)}
+        testSetCount={pagination.total}
+      />
 
       <div className="mb-6 border-b border-co-gray-200">
         <nav className="-mb-px flex gap-6">
@@ -223,6 +231,12 @@ function TestSets(): JSX.Element {
         title="Delete Category?"
         message={`Are you sure you want to delete "${categoryDeleteConfirm.category?.name}"? This action cannot be undone.`}
         confirmText={isCategoryDeleting ? 'Deleting...' : 'Delete Category'}
+      />
+
+      <Run7PSModal
+        isOpen={is7PSModalOpen}
+        onClose={() => setIs7PSModalOpen(false)}
+        testSetCount={pagination.total}
       />
     </div>
   );

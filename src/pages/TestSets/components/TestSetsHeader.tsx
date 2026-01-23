@@ -2,9 +2,15 @@ import { ReleaseSelector } from '@/components/common';
 
 interface TestSetsHeaderProps {
   onCreateClick: () => void;
+  onRun7PSClick: () => void;
+  testSetCount: number;
 }
 
-function TestSetsHeader({ onCreateClick }: TestSetsHeaderProps): JSX.Element {
+function TestSetsHeader({
+  onCreateClick,
+  onRun7PSClick,
+  testSetCount,
+}: TestSetsHeaderProps): JSX.Element {
   return (
     <div className="mb-6 flex items-center justify-between">
       <div>
@@ -13,7 +19,12 @@ function TestSetsHeader({ onCreateClick }: TestSetsHeaderProps): JSX.Element {
       </div>
       <div className="flex items-center gap-4">
         <ReleaseSelector className="w-48" />
-        <button className="btn-outline" disabled>
+        <button
+          onClick={onRun7PSClick}
+          disabled={testSetCount === 0}
+          className="btn-outline"
+          title={testSetCount === 0 ? 'No test sets to run' : `Run all ${testSetCount} test sets`}
+        >
           Run 7PS Test
         </button>
         <button onClick={onCreateClick} className="btn-primary">

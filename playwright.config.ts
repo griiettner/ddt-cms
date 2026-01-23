@@ -1,9 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Allow configuring workers via environment variable (default: 1, max: 7 for 7PS)
+const workers = parseInt(process.env.PLAYWRIGHT_WORKERS || '1', 10);
+
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false,
-  workers: 1, // Queue: one at a time
+  fullyParallel: workers > 1, // Enable parallel execution when multiple workers
+  workers,
   reporter: [['json', { outputFile: 'test-results/results.json' }]],
   use: {
     baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',

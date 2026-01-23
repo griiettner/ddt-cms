@@ -2,6 +2,7 @@
  * TestRuns Page
  * Shows the complete test run history for a release with pagination and filters
  */
+import { useState, useCallback } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { LoadingSpinner } from '@/components/common';
 import { useTestRunsPage } from './hooks/useTestRunsPage';
@@ -11,9 +12,17 @@ import {
   TestRunReportModal,
   TestRunsFilters,
 } from './components';
+import { BatchReportModal } from '@/pages/TestSets/components';
+import { testExecutionApi, type BatchExecutionStatus } from '@/services/api';
 
 function TestRuns(): JSX.Element {
   const { releaseId: releaseSlug } = useParams({ strict: false }) as { releaseId?: string };
+
+  // Batch report modal state
+  const [isBatchReportOpen, setIsBatchReportOpen] = useState(false);
+  const [batchStatus, setBatchStatus] = useState<BatchExecutionStatus | null>(null);
+  const [batchReleaseNumber, setBatchReleaseNumber] = useState('');
+
   const {
     testRuns,
     selectedRelease,
@@ -44,6 +53,42 @@ function TestRuns(): JSX.Element {
     goToPreviousPage,
     changePageSize,
   } = useTestRunsPage();
+
+  // Handle opening batch report
+  const handleViewBatchReport = useCallback(async (batchId: string) => {
+    try {
+      const response = await testExecutionApi.getBatchDetails(batchId);
+      if (response.data) {
+        const details = response.data;
+        // Convert to BatchExecutionStatus format for the modal
+        const status: BatchExecutionStatus = {
+          batchId: details.batchId,
+          status: details.status,
+          totalSets: details.totalSets,
+          completedSets: details.completedSets,
+          passedSets: details.passedSets,
+          failedSets: details.failedSets,
+          startedAt: details.startedAt,
+          completedAt: details.completedAt,
+          testRuns: details.testRuns.map((r) => ({
+            testRunId: r.testRunId,
+            testSetName: r.testSetName,
+            status: r.status as 'pending' | 'running' | 'passed' | 'failed',
+          })),
+        };
+        setBatchStatus(status);
+        setBatchReleaseNumber(details.releaseNumber);
+        setIsBatchReportOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to load batch details:', err);
+    }
+  }, []);
+
+  const handleCloseBatchReport = useCallback(() => {
+    setIsBatchReportOpen(false);
+    setBatchStatus(null);
+  }, []);
 
   if (!selectedReleaseId) {
     return (
@@ -126,6 +171,7 @@ function TestRuns(): JSX.Element {
           testRuns={testRuns}
           onViewDetails={openDetailModal}
           onViewReport={openReportModal}
+          onViewBatchReport={handleViewBatchReport}
           pagination={pagination}
           onPageChange={goToPage}
           onNextPage={goToNextPage}
@@ -139,6 +185,16 @@ function TestRuns(): JSX.Element {
 
       {/* Report Modal */}
       <TestRunReportModal isOpen={isReportModalOpen} onClose={closeReportModal} run={reportRun} />
+
+      {/* Batch Report Modal */}
+      {batchStatus && (
+        <BatchReportModal
+          isOpen={isBatchReportOpen}
+          onClose={handleCloseBatchReport}
+          batchStatus={batchStatus}
+          releaseNumber={batchReleaseNumber}
+        />
+      )}
     </div>
   );
 }

@@ -196,6 +196,8 @@ export interface TestRunRow {
   environment: string | null;
   base_url: string | null;
   video_path: string | null;
+  batch_id: string | null; // For 7PS batch runs
+  batch_size: number | null; // Number of test sets in batch
 }
 
 // Count result type

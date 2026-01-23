@@ -556,6 +556,29 @@ export interface TestRunStatusResponse extends TestRun {
   progress: ProgressUpdate | null;
 }
 
+// Bulk execution response types
+export interface BulkExecuteResponse {
+  batchId: string;
+  testRunIds: number[];
+  totalSets: number;
+}
+
+export interface BatchExecutionStatus {
+  batchId: string;
+  status: 'running' | 'completed' | 'failed';
+  totalSets: number;
+  completedSets: number;
+  passedSets: number;
+  failedSets: number;
+  startedAt: string;
+  completedAt: string | null;
+  testRuns: {
+    testRunId: number;
+    testSetName: string;
+    status: 'pending' | 'running' | 'passed' | 'failed';
+  }[];
+}
+
 export const testExecutionApi = {
   execute(
     testSetId: number,
@@ -581,6 +604,53 @@ export const testExecutionApi = {
       }>
     >;
   },
+  // 7PS (7 Parallel Sets) execution
+  executeAll(data: {
+    releaseId: number;
+    environment: string;
+  }): Promise<ApiResponse<BulkExecuteResponse>> {
+    return api.post('/test-runs/execute-all', data) as Promise<ApiResponse<BulkExecuteResponse>>;
+  },
+  getBatchStatus(batchId: string): Promise<ApiResponse<BatchExecutionStatus | null>> {
+    return api.get(`/test-runs/batch/${batchId}/status`) as Promise<
+      ApiResponse<BatchExecutionStatus | null>
+    >;
+  },
+  getActiveBatches(): Promise<ApiResponse<BatchExecutionStatus[]>> {
+    return api.get('/test-runs/batches/active') as Promise<ApiResponse<BatchExecutionStatus[]>>;
+  },
+  getBatchDetails(batchId: string): Promise<ApiResponse<BatchDetailsResponse | null>> {
+    return api.get(`/test-runs/batch/${batchId}/details`) as Promise<
+      ApiResponse<BatchDetailsResponse | null>
+    >;
+  },
 };
+
+// Batch details response (from database)
+export interface BatchDetailsResponse {
+  batchId: string;
+  releaseId: number;
+  releaseNumber: string;
+  environment: string;
+  status: 'running' | 'completed' | 'failed';
+  totalSets: number;
+  completedSets: number;
+  passedSets: number;
+  failedSets: number;
+  executedBy: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  totalDurationMs: number;
+  testRuns: {
+    testRunId: number;
+    testSetId: number;
+    testSetName: string;
+    status: string;
+    passedSteps: number;
+    failedSteps: number;
+    totalSteps: number;
+    durationMs: number;
+  }[];
+}
 
 export default api;

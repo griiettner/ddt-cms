@@ -401,6 +401,12 @@ const runMigrations = (db: DatabaseInstance): void => {
     if (!testRunsColumnNames.includes('video_path')) {
       db.exec('ALTER TABLE test_runs ADD COLUMN video_path TEXT');
     }
+
+    // Migration: Add batch_id column to test_runs for 7PS batch execution grouping
+    if (!testRunsColumnNames.includes('batch_id')) {
+      db.exec('ALTER TABLE test_runs ADD COLUMN batch_id VARCHAR(100)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_test_runs_batch ON test_runs(batch_id)');
+    }
   } catch (err) {
     const error = err as Error;
     console.error('Migration warning (non-fatal):', error.message);

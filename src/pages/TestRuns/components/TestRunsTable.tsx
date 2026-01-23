@@ -1,5 +1,6 @@
 /**
  * TestRunsTable - Displays the full test run history with pagination
+ * Batch runs (7PS) are shown as combined rows with special styling
  */
 import type { TestRun } from '@/types/entities';
 import type { TestRunPagination } from '@/types/api';
@@ -8,6 +9,7 @@ interface TestRunsTableProps {
   testRuns: TestRun[];
   onViewDetails: (run: TestRun) => void;
   onViewReport?: (run: TestRun) => void;
+  onViewBatchReport?: (batchId: string) => void;
   pagination: TestRunPagination;
   onPageChange: (page: number) => void;
   onNextPage: () => void;
@@ -89,6 +91,7 @@ function TestRunsTable({
   testRuns,
   onViewDetails,
   onViewReport,
+  onViewBatchReport,
   pagination,
   onPageChange,
   onNextPage,
@@ -144,66 +147,117 @@ function TestRunsTable({
             </tr>
           </thead>
           <tbody>
-            {testRuns.map((run) => (
-              <tr key={run.id} className="transition-colors hover:bg-co-gray-50">
-                <td className="text-sm text-co-gray-500">#{run.id}</td>
-                <td className="font-medium text-co-gray-900">
-                  {run.test_set_name || `Test Set #${run.test_set_id}` || 'All Tests'}
-                </td>
-                <td>
-                  {run.environment ? (
-                    <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
-                      {run.environment}
-                    </span>
-                  ) : (
-                    <span className="text-co-gray-400">-</span>
-                  )}
-                </td>
-                <td>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      run.status === 'passed'
-                        ? 'bg-green-100 text-green-700'
-                        : run.status === 'failed'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                    }`}
-                  >
-                    {run.status || 'unknown'}
-                  </span>
-                </td>
-                <td className="text-co-gray-700">{run.total_scenarios || 0}</td>
-                <td className="text-co-gray-700">
-                  <span className="font-medium text-green-600">{run.passed_steps || 0}</span>
-                  <span className="text-co-gray-400 mx-1">/</span>
-                  <span className="text-co-gray-600">{run.total_steps || 0}</span>
-                  {run.failed_steps > 0 && (
-                    <span className="ml-2 text-sm text-red-500">({run.failed_steps} failed)</span>
-                  )}
-                </td>
-                <td className="text-sm text-co-gray-500">{formatDuration(run.duration_ms)}</td>
-                <td className="text-sm text-co-gray-600">{run.executed_by || '-'}</td>
-                <td className="text-sm text-co-gray-500">{formatDate(run.executed_at)}</td>
-                <td>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => onViewDetails(run)}
-                      className="text-sm font-medium text-co-blue transition-colors hover:text-co-blue-hover"
-                    >
-                      View
-                    </button>
-                    {onViewReport && run.status !== 'running' && (
-                      <button
-                        onClick={() => onViewReport(run)}
-                        className="text-sm font-medium text-co-gray-500 transition-colors hover:text-co-gray-700"
-                      >
-                        Report
-                      </button>
+            {testRuns.map((run) => {
+              const isBatch = !!run.batch_id;
+              return (
+                <tr
+                  key={isBatch ? run.batch_id : run.id}
+                  className={`transition-colors hover:bg-co-gray-50 ${isBatch ? 'bg-purple-50/30' : ''}`}
+                >
+                  <td className="text-sm text-co-gray-500">
+                    {isBatch ? (
+                      <span className="flex items-center gap-1">
+                        <svg
+                          className="h-4 w-4 text-purple-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                          />
+                        </svg>
+                        <span className="text-purple-600">7PS</span>
+                      </span>
+                    ) : (
+                      `#${run.id}`
                     )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="font-medium text-co-gray-900">
+                    {isBatch ? (
+                      <span className="flex items-center gap-2">
+                        <span className="text-purple-700">{run.test_set_name}</span>
+                      </span>
+                    ) : (
+                      run.test_set_name || `Test Set #${run.test_set_id}` || 'All Tests'
+                    )}
+                  </td>
+                  <td>
+                    {run.environment ? (
+                      <span className="bg-co-blue-50 rounded px-2 py-0.5 text-xs font-medium uppercase text-co-blue">
+                        {run.environment}
+                      </span>
+                    ) : (
+                      <span className="text-co-gray-400">-</span>
+                    )}
+                  </td>
+                  <td>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        run.status === 'passed'
+                          ? 'bg-green-100 text-green-700'
+                          : run.status === 'failed'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                      }`}
+                    >
+                      {run.status || 'unknown'}
+                    </span>
+                  </td>
+                  <td className="text-co-gray-700">
+                    {isBatch ? (
+                      <span className="text-purple-600">{run.batch_size} sets</span>
+                    ) : (
+                      run.total_scenarios || 0
+                    )}
+                  </td>
+                  <td className="text-co-gray-700">
+                    <span className="font-medium text-green-600">{run.passed_steps || 0}</span>
+                    <span className="text-co-gray-400 mx-1">/</span>
+                    <span className="text-co-gray-600">{run.total_steps || 0}</span>
+                    {(run.failed_steps ?? 0) > 0 && (
+                      <span className="ml-2 text-sm text-red-500">({run.failed_steps} failed)</span>
+                    )}
+                  </td>
+                  <td className="text-sm text-co-gray-500">{formatDuration(run.duration_ms)}</td>
+                  <td className="text-sm text-co-gray-600">{run.executed_by || '-'}</td>
+                  <td className="text-sm text-co-gray-500">{formatDate(run.executed_at)}</td>
+                  <td>
+                    <div className="flex items-center gap-3">
+                      {!isBatch && (
+                        <button
+                          onClick={() => onViewDetails(run)}
+                          className="text-sm font-medium text-co-blue transition-colors hover:text-co-blue-hover"
+                        >
+                          View
+                        </button>
+                      )}
+                      {run.status !== 'running' &&
+                        (isBatch && onViewBatchReport && run.batch_id ? (
+                          <button
+                            onClick={() => onViewBatchReport(run.batch_id as string)}
+                            className="text-sm font-medium text-purple-600 transition-colors hover:text-purple-800"
+                          >
+                            View Report
+                          </button>
+                        ) : (
+                          onViewReport && (
+                            <button
+                              onClick={() => onViewReport(run)}
+                              className="text-sm font-medium text-co-gray-500 transition-colors hover:text-co-gray-700"
+                            >
+                              Report
+                            </button>
+                          )
+                        ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
