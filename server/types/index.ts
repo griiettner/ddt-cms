@@ -64,7 +64,7 @@ export interface ReleaseRow {
   created_by: string | null;
   closed_at: string | null;
   closed_by: string | null;
-  status: 'open' | 'closed' | 'archived';
+  status: 'draft' | 'open' | 'closed' | 'archived';
 }
 
 export interface TestSetRow {

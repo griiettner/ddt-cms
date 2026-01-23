@@ -3,12 +3,10 @@
 # run-7ps.sh - Execute 7PS (7 Parallel Sets) batch test run via API
 #
 # Usage:
-#   ./scripts/run-7ps.sh --release <release_number> [options]
-#
-# Required:
-#   --release, -r       Release number (e.g., 2.1.1)
+#   ./scripts/run-7ps.sh [options]
 #
 # Optional:
+#   --release, -r       Release number (default: latest active release)
 #   --env, -e           Environment name (default: qa)
 #   --api-url, -a       API base URL (default: http://localhost:<PORT from .env>)
 #   --poll-interval     Polling interval in seconds (default: 5)
@@ -18,11 +16,11 @@
 #   --help, -h          Show this help message
 #
 # Examples:
-#   ./scripts/run-7ps.sh -r 2.1.1                # Uses qa environment by default
-#   ./scripts/run-7ps.sh -r 2.1.1 -e dev         # Uses dev environment
-#   ./scripts/run-7ps.sh -r 2.1.1 --env uat      # Uses uat environment
-#   ./scripts/run-7ps.sh -r 2.1.1 -a http://10.0.0.1:3000
-#   ./scripts/run-7ps.sh -r 2.1.1 --json --quiet # CI/CD mode
+#   ./scripts/run-7ps.sh                         # Uses latest active release + qa env
+#   ./scripts/run-7ps.sh -e dev                  # Uses latest active release + dev env
+#   ./scripts/run-7ps.sh -r 2.1.1                # Uses specific release + qa env
+#   ./scripts/run-7ps.sh -r 2.1.1 -e dev         # Uses specific release + dev env
+#   ./scripts/run-7ps.sh --json --quiet          # CI/CD mode
 
 set -e
 
@@ -88,7 +86,7 @@ print_progress() {
 
 # Show help
 show_help() {
-    head -25 "$0" | tail -23 | sed 's/^#//'
+    head -24 "$0" | tail -22 | sed 's/^#//'
     exit 0
 }
 
@@ -134,13 +132,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate required arguments
-if [ -z "$RELEASE" ]; then
-    print_error "Release number is required. Use --release or -r"
-    echo "Example: ./scripts/run-7ps.sh -r 2.1.1"
-    exit 1
-fi
-
 # Check for required commands
 command -v curl >/dev/null 2>&1 || { print_error "curl is required but not installed."; exit 1; }
 command -v jq >/dev/null 2>&1 || { print_error "jq is required but not installed."; exit 1; }
@@ -150,36 +141,67 @@ API_URL="${API_URL%/}"
 
 print_info "Starting 7PS batch execution..."
 print_info "API URL: $API_URL"
-print_info "Release: $RELEASE"
 print_info "Environment: $ENVIRONMENT"
 echo ""
 
-# Step 1: Look up release ID by release number
-print_info "Looking up release '$RELEASE'..."
+# Step 1: Get release (either specified or latest active)
+if [ -z "$RELEASE" ]; then
+    # No release specified - get the latest active release
+    print_info "No release specified, fetching latest active release..."
 
-RELEASE_RESPONSE=$(curl -s "${API_URL}/api/releases?search=${RELEASE}&limit=100")
+    LATEST_RESPONSE=$(curl -s "${API_URL}/api/releases/latest-active")
 
-# Check if request succeeded
-if [ "$(echo "$RELEASE_RESPONSE" | jq -r '.success // false')" != "true" ]; then
-    print_error "Failed to fetch releases from API"
-    exit 1
+    # Check if request succeeded
+    if [ "$(echo "$LATEST_RESPONSE" | jq -r '.success // false')" != "true" ]; then
+        ERROR_MSG=$(echo "$LATEST_RESPONSE" | jq -r '.error // "Unknown error"')
+        echo ""
+        print_error "No active release found!"
+        echo ""
+        echo -e "${YELLOW}$ERROR_MSG${NC}"
+        echo ""
+        echo -e "To fix this:"
+        echo -e "  1. Open the UAT DDT CMS in your browser"
+        echo -e "  2. Go to ${CYAN}Releases${NC} page"
+        echo -e "  3. Create a new release or open an existing one"
+        echo ""
+        exit 1
+    fi
+
+    RELEASE=$(echo "$LATEST_RESPONSE" | jq -r '.data.release_number')
+    RELEASE_ID=$(echo "$LATEST_RESPONSE" | jq -r '.data.id')
+
+    print_success "Using latest active release: ${CYAN}${RELEASE}${NC} (ID: $RELEASE_ID)"
+    echo ""
+else
+    # Release specified - look it up by number
+    print_info "Looking up release '$RELEASE'..."
+
+    RELEASE_RESPONSE=$(curl -s "${API_URL}/api/releases?search=${RELEASE}&limit=100")
+
+    # Check if request succeeded
+    if [ "$(echo "$RELEASE_RESPONSE" | jq -r '.success // false')" != "true" ]; then
+        print_error "Failed to fetch releases from API"
+        exit 1
+    fi
+
+    # Find exact match for release number
+    RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r --arg rel "$RELEASE" '.data[] | select(.release_number == $rel) | .id' | head -1)
+
+    if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+        echo ""
+        print_error "Release '$RELEASE' not found!"
+        echo ""
+        echo -e "${YELLOW}Available releases:${NC}"
+        echo "$RELEASE_RESPONSE" | jq -r '.data[] | "  - \(.release_number) (ID: \(.id), Status: \(.status))"' | head -10
+        echo ""
+        exit 1
+    fi
+
+    print_success "Found release '$RELEASE' (ID: $RELEASE_ID)"
+    echo ""
 fi
 
-# Find exact match for release number
-RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r --arg rel "$RELEASE" '.data[] | select(.release_number == $rel) | .id' | head -1)
-
-if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-    echo ""
-    print_error "Release '$RELEASE' not found!"
-    echo ""
-    echo -e "${YELLOW}Available releases:${NC}"
-    echo "$RELEASE_RESPONSE" | jq -r '.data[] | "  - \(.release_number) (ID: \(.id))"' | head -10
-    echo ""
-    exit 1
-fi
-
-print_success "Found release '$RELEASE' (ID: $RELEASE_ID)"
-echo ""
+print_info "Release: $RELEASE"
 
 # Step 2: Start batch execution
 print_info "Initiating batch execution..."

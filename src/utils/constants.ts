@@ -1,4 +1,5 @@
 export const RELEASE_STATUSES = {
+  DRAFT: 'draft',
   OPEN: 'open',
   CLOSED: 'closed',
   ARCHIVED: 'archived',

@@ -3,7 +3,7 @@
  */
 
 // Release Types
-export type ReleaseStatus = 'open' | 'closed' | 'archived';
+export type ReleaseStatus = 'draft' | 'open' | 'closed' | 'archived';
 
 export interface Release {
   id: number;

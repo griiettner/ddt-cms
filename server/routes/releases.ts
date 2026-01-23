@@ -46,6 +46,49 @@ interface ReleaseWithCounts extends ReleaseRow {
   testCaseCount: number;
 }
 
+// GET /api/releases/latest-active - Get the latest active (open) release
+router.get('/latest-active', (_req: Request, res: Response): void => {
+  try {
+    const db = getDb();
+
+    // Get the latest open release (most recently created)
+    const release = db
+      .prepare(
+        `SELECT * FROM releases
+           WHERE status = 'open'
+           ORDER BY created_at DESC
+           LIMIT 1`
+      )
+      .get() as ReleaseRow | undefined;
+
+    if (!release) {
+      res.status(404).json({
+        success: false,
+        error: 'No active release found. Please create or open a release first.',
+      });
+      return;
+    }
+
+    // Get counts for the release
+    const testSetCount = (
+      db
+        .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
+        .get(release.id) as CountResult
+    ).count;
+    const testCaseCount = (
+      db
+        .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
+        .get(release.id) as CountResult
+    ).count;
+
+    const data: ReleaseWithCounts = { ...release, testSetCount, testCaseCount };
+    res.json({ success: true, data });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/releases - List all releases with pagination and filters
 router.get(
   '/',
@@ -505,6 +548,26 @@ router.patch(
 );
 
 // Actions
+router.put('/:id/draft', (req: Request<ReleaseIdParams>, res: Response): void => {
+  try {
+    const db = getDb();
+    db.prepare("UPDATE releases SET status = 'draft' WHERE id = ?").run(req.params.id);
+
+    logAudit({
+      req,
+      action: 'UPDATE',
+      resourceType: 'release',
+      resourceId: parseInt(req.params.id),
+      details: { status: 'draft' },
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void => {
   try {
     const db = getDb();

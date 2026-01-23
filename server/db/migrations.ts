@@ -24,7 +24,7 @@ export const initSchema = (): void => {
       created_by VARCHAR(255),
       closed_at TIMESTAMP,
       closed_by VARCHAR(255),
-      status VARCHAR(20) DEFAULT 'open' CHECK(status IN ('open', 'closed', 'archived'))
+      status VARCHAR(20) DEFAULT 'draft' CHECK(status IN ('draft', 'open', 'closed', 'archived'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_releases_status ON releases(status);
