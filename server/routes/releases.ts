@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
+import type { DatabaseWrapper } from '../db/database.js';
 import type {
   AuthenticatedRequest,
   ReleaseRow,
@@ -47,19 +48,17 @@ interface ReleaseWithCounts extends ReleaseRow {
 }
 
 // GET /api/releases/latest-active - Get the latest active (open) release
-router.get('/latest-active', (_req: Request, res: Response): void => {
+router.get('/latest-active', async (_req: Request, res: Response): Promise<void> => {
   try {
     const db = getDb();
 
     // Get the latest open release (most recently created)
-    const release = db
-      .prepare(
-        `SELECT * FROM releases
-           WHERE status = 'open'
-           ORDER BY created_at DESC
-           LIMIT 1`
-      )
-      .get() as ReleaseRow | undefined;
+    const release = await db.get<ReleaseRow>(
+      `SELECT * FROM releases
+       WHERE status = 'open'
+       ORDER BY created_at DESC
+       LIMIT 1`
+    );
 
     if (!release) {
       res.status(404).json({
@@ -70,16 +69,17 @@ router.get('/latest-active', (_req: Request, res: Response): void => {
     }
 
     // Get counts for the release
-    const testSetCount = (
-      db
-        .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
-        .get(release.id) as CountResult
-    ).count;
-    const testCaseCount = (
-      db
-        .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
-        .get(release.id) as CountResult
-    ).count;
+    const testSetResult = await db.get<CountResult>(
+      'SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?',
+      [release.id]
+    );
+    const testSetCount = testSetResult?.count ?? 0;
+
+    const testCaseResult = await db.get<CountResult>(
+      'SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?',
+      [release.id]
+    );
+    const testCaseCount = testCaseResult?.count ?? 0;
 
     const data: ReleaseWithCounts = { ...release, testSetCount, testCaseCount };
     res.json({ success: true, data });
@@ -92,7 +92,10 @@ router.get('/latest-active', (_req: Request, res: Response): void => {
 // GET /api/releases - List all releases with pagination and filters
 router.get(
   '/',
-  (req: Request<object, unknown, unknown, ReleasesListQuery>, res: Response): void => {
+  async (
+    req: Request<object, unknown, unknown, ReleasesListQuery>,
+    res: Response
+  ): Promise<void> => {
     const {
       page = '1',
       limit = '10',
@@ -138,25 +141,27 @@ router.get(
 
       query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
 
-      const totalResult = db.prepare(countQuery).get(...params) as TotalResult;
-      const total: number = totalResult.total;
-      const releases = db.prepare(query).all(...params, limitNum, offset) as ReleaseRow[];
+      const totalResult = await db.get<TotalResult>(countQuery, params);
+      const total: number = totalResult?.total ?? 0;
+      const releases = await db.all<ReleaseRow>(query, [...params, limitNum, offset]);
 
       // Fetch counts for each release from the unified database
-      const data: ReleaseWithCounts[] = releases.map((r: ReleaseRow): ReleaseWithCounts => {
-        const testSetCount = (
-          db
-            .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
-            .get(r.id) as CountResult
-        ).count;
-        const testCaseCount = (
-          db
-            .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
-            .get(r.id) as CountResult
-        ).count;
+      const data: ReleaseWithCounts[] = [];
+      for (const r of releases) {
+        const testSetResult = await db.get<CountResult>(
+          'SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?',
+          [r.id]
+        );
+        const testSetCount = testSetResult?.count ?? 0;
 
-        return { ...r, testSetCount, testCaseCount };
-      });
+        const testCaseResult = await db.get<CountResult>(
+          'SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?',
+          [r.id]
+        );
+        const testCaseCount = testCaseResult?.count ?? 0;
+
+        data.push({ ...r, testSetCount, testCaseCount });
+      }
 
       const response: PaginatedApiResponse<ReleaseWithCounts> = {
         success: true,
@@ -188,39 +193,40 @@ router.post(
       const db = getDb();
 
       // Check if release number already exists
-      const existing = db
-        .prepare('SELECT id FROM releases WHERE release_number = ?')
-        .get(release_number) as ReleaseRow | undefined;
+      const existing = await db.get<ReleaseRow>(
+        'SELECT id FROM releases WHERE release_number = ?',
+        [release_number]
+      );
       if (existing) {
         res.status(400).json({ success: false, error: 'Release number already exists' });
         return;
       }
 
       // Find the latest release to copy data from (regardless of status)
-      const latestRelease = db
-        .prepare('SELECT id FROM releases ORDER BY created_at DESC LIMIT 1')
-        .get() as ReleaseRow | undefined;
+      const latestRelease = await db.get<ReleaseRow>(
+        'SELECT id FROM releases ORDER BY created_at DESC LIMIT 1'
+      );
 
       // Insert the new release
-      const stmt = db.prepare(
-        'INSERT INTO releases (release_number, description, notes, created_by, status) VALUES (?, ?, ?, ?, ?)'
+      const result = await db.run(
+        'INSERT INTO releases (release_number, description, notes, created_by, status) VALUES (?, ?, ?, ?, ?)',
+        [release_number, description || '', notes || '', user, 'open']
       );
-      const result = stmt.run(release_number, description || '', notes || '', user, 'open');
-      const newReleaseId = result.lastInsertRowid;
+      const newReleaseId = Number(result.lastInsertRowid);
 
       // If there's a previous release, copy its test data to the new release
       if (latestRelease) {
-        copyReleaseData(db, latestRelease.id, newReleaseId as number);
+        await copyReleaseData(db, latestRelease.id, newReleaseId);
       } else {
         // Seed default configuration options for the new release
-        seedDefaultConfig(db, newReleaseId as number);
+        await seedDefaultConfig(db, newReleaseId);
       }
 
       logAudit({
         req,
         action: 'CREATE',
         resourceType: 'release',
-        resourceId: newReleaseId as number,
+        resourceId: newReleaseId,
         resourceName: release_number,
       });
 
@@ -237,11 +243,11 @@ router.post(
 /**
  * Copy test data from one release to another
  */
-function copyReleaseData(
-  db: ReturnType<typeof getDb>,
+async function copyReleaseData(
+  db: DatabaseWrapper,
   sourceReleaseId: number,
   targetReleaseId: number
-): void {
+): Promise<void> {
   // ID mappings for foreign key references
   const testSetMapping = new Map<number, number>();
   const testCaseMapping = new Map<number, number>();
@@ -256,24 +262,16 @@ function copyReleaseData(
     created_at: string;
     created_by: string | null;
   }
-  const testSets = db
-    .prepare('SELECT * FROM test_sets WHERE release_id = ?')
-    .all(sourceReleaseId) as TestSetRow[];
-
-  const insertTestSet = db.prepare(
-    'INSERT INTO test_sets (release_id, category_id, name, description, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)'
-  );
+  const testSets = await db.all<TestSetRow>('SELECT * FROM test_sets WHERE release_id = ?', [
+    sourceReleaseId,
+  ]);
 
   for (const ts of testSets) {
-    const result = insertTestSet.run(
-      targetReleaseId,
-      ts.category_id,
-      ts.name,
-      ts.description,
-      ts.created_at,
-      ts.created_by
+    const result = await db.run(
+      'INSERT INTO test_sets (release_id, category_id, name, description, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+      [targetReleaseId, ts.category_id, ts.name, ts.description, ts.created_at, ts.created_by]
     );
-    testSetMapping.set(ts.id, result.lastInsertRowid as number);
+    testSetMapping.set(ts.id, Number(result.lastInsertRowid));
   }
 
   // Copy test_cases
@@ -285,26 +283,18 @@ function copyReleaseData(
     order_index: number;
     created_at: string;
   }
-  const testCases = db
-    .prepare('SELECT * FROM test_cases WHERE release_id = ?')
-    .all(sourceReleaseId) as TestCaseRow[];
-
-  const insertTestCase = db.prepare(
-    'INSERT INTO test_cases (release_id, test_set_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  );
+  const testCases = await db.all<TestCaseRow>('SELECT * FROM test_cases WHERE release_id = ?', [
+    sourceReleaseId,
+  ]);
 
   for (const tc of testCases) {
     const newTestSetId = testSetMapping.get(tc.test_set_id);
     if (newTestSetId !== undefined) {
-      const result = insertTestCase.run(
-        targetReleaseId,
-        newTestSetId,
-        tc.name,
-        tc.description,
-        tc.order_index,
-        tc.created_at
+      const result = await db.run(
+        'INSERT INTO test_cases (release_id, test_set_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [targetReleaseId, newTestSetId, tc.name, tc.description, tc.order_index, tc.created_at]
       );
-      testCaseMapping.set(tc.id, result.lastInsertRowid as number);
+      testCaseMapping.set(tc.id, Number(result.lastInsertRowid));
     }
   }
 
@@ -317,26 +307,19 @@ function copyReleaseData(
     order_index: number;
     created_at: string;
   }
-  const scenarios = db
-    .prepare('SELECT * FROM test_scenarios WHERE release_id = ?')
-    .all(sourceReleaseId) as TestScenarioRow[];
-
-  const insertScenario = db.prepare(
-    'INSERT INTO test_scenarios (release_id, test_case_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  const scenarios = await db.all<TestScenarioRow>(
+    'SELECT * FROM test_scenarios WHERE release_id = ?',
+    [sourceReleaseId]
   );
 
   for (const sc of scenarios) {
     const newTestCaseId = testCaseMapping.get(sc.test_case_id);
     if (newTestCaseId !== undefined) {
-      const result = insertScenario.run(
-        targetReleaseId,
-        newTestCaseId,
-        sc.name,
-        sc.description,
-        sc.order_index,
-        sc.created_at
+      const result = await db.run(
+        'INSERT INTO test_scenarios (release_id, test_case_id, name, description, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [targetReleaseId, newTestCaseId, sc.name, sc.description, sc.order_index, sc.created_at]
       );
-      scenarioMapping.set(sc.id, result.lastInsertRowid as number);
+      scenarioMapping.set(sc.id, Number(result.lastInsertRowid));
     }
   }
 
@@ -357,36 +340,35 @@ function copyReleaseData(
     created_at: string;
     updated_at: string;
   }
-  const steps = db
-    .prepare('SELECT * FROM test_steps WHERE release_id = ?')
-    .all(sourceReleaseId) as TestStepRow[];
-
-  const insertStep = db.prepare(`
-    INSERT INTO test_steps (
-      release_id, test_scenario_id, order_index, step_definition, type, element_id,
-      action, action_result, select_config_id, match_config_id, required, expected_results,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const steps = await db.all<TestStepRow>('SELECT * FROM test_steps WHERE release_id = ?', [
+    sourceReleaseId,
+  ]);
 
   for (const step of steps) {
     const newScenarioId = scenarioMapping.get(step.test_scenario_id);
     if (newScenarioId !== undefined) {
-      insertStep.run(
-        targetReleaseId,
-        newScenarioId,
-        step.order_index,
-        step.step_definition,
-        step.type,
-        step.element_id,
-        step.action,
-        step.action_result,
-        step.select_config_id,
-        step.match_config_id,
-        step.required,
-        step.expected_results,
-        step.created_at,
-        step.updated_at
+      await db.run(
+        `INSERT INTO test_steps (
+          release_id, test_scenario_id, order_index, step_definition, type, element_id,
+          action, action_result, select_config_id, match_config_id, required, expected_results,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          targetReleaseId,
+          newScenarioId,
+          step.order_index,
+          step.step_definition,
+          step.type,
+          step.element_id,
+          step.action,
+          step.action_result,
+          step.select_config_id,
+          step.match_config_id,
+          step.required,
+          step.expected_results,
+          step.created_at,
+          step.updated_at,
+        ]
       );
     }
   }
@@ -402,27 +384,27 @@ function copyReleaseData(
     is_active: number;
     order_index: number;
   }
-  const configs = db
-    .prepare('SELECT * FROM configuration_options WHERE release_id = ?')
-    .all(sourceReleaseId) as ConfigOptionRow[];
-
-  const insertConfig = db.prepare(`
-    INSERT INTO configuration_options (
-      release_id, category, key, display_name, result_type, default_value, config_data, is_active, order_index
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const configs = await db.all<ConfigOptionRow>(
+    'SELECT * FROM configuration_options WHERE release_id = ?',
+    [sourceReleaseId]
+  );
 
   for (const config of configs) {
-    insertConfig.run(
-      targetReleaseId,
-      config.category,
-      config.key,
-      config.display_name,
-      config.result_type,
-      config.default_value,
-      config.config_data,
-      config.is_active,
-      config.order_index
+    await db.run(
+      `INSERT INTO configuration_options (
+        release_id, category, key, display_name, result_type, default_value, config_data, is_active, order_index
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        targetReleaseId,
+        config.category,
+        config.key,
+        config.display_name,
+        config.result_type,
+        config.default_value,
+        config.config_data,
+        config.is_active,
+        config.order_index,
+      ]
     );
   }
 }
@@ -430,7 +412,7 @@ function copyReleaseData(
 /**
  * Seed default configuration options for a new release
  */
-function seedDefaultConfig(db: ReturnType<typeof getDb>, releaseId: number): void {
+async function seedDefaultConfig(db: DatabaseWrapper, releaseId: number): Promise<void> {
   const types = [
     { key: 'button-click', name: 'button-click' },
     { key: 'button-click-redirect', name: 'button-click-redirect' },
@@ -461,27 +443,39 @@ function seedDefaultConfig(db: ReturnType<typeof getDb>, releaseId: number): voi
     { key: 'Visible', name: 'Visible', result_type: 'bool' },
   ];
 
-  const insertConfig = db.prepare(`
-    INSERT INTO configuration_options (release_id, category, key, display_name, result_type, order_index)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    await db.run(
+      'INSERT INTO configuration_options (release_id, category, key, display_name, result_type, order_index) VALUES (?, ?, ?, ?, ?, ?)',
+      [releaseId, 'type', t.key, t.name, null, i]
+    );
+  }
 
-  types.forEach((t, i) => insertConfig.run(releaseId, 'type', t.key, t.name, null, i));
-  actions.forEach((a, i) => insertConfig.run(releaseId, 'action', a.key, a.name, a.result_type, i));
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    await db.run(
+      'INSERT INTO configuration_options (release_id, category, key, display_name, result_type, order_index) VALUES (?, ?, ?, ?, ?, ?)',
+      [releaseId, 'action', a.key, a.name, a.result_type, i]
+    );
+  }
 }
 
 // PATCH /api/releases/:id - Update release details or notes
 router.patch(
   '/:id',
-  (req: Request<ReleaseIdParams, unknown, UpdateReleaseBody>, res: Response): void => {
+  async (
+    req: Request<ReleaseIdParams, unknown, UpdateReleaseBody>,
+    res: Response
+  ): Promise<void> => {
     const { release_number, description, notes } = req.body;
     const db = getDb();
 
     try {
       // Fetch the old release data for audit logging
-      const oldRelease = db
-        .prepare('SELECT release_number, description, notes, status FROM releases WHERE id = ?')
-        .get(req.params.id) as ReleaseRow | undefined;
+      const oldRelease = await db.get<ReleaseRow>(
+        'SELECT release_number, description, notes, status FROM releases WHERE id = ?',
+        [req.params.id]
+      );
       if (!oldRelease) {
         res.status(404).json({ success: false, error: 'Release not found' });
         return;
@@ -511,7 +505,7 @@ router.patch(
       query += fields.join(', ') + ' WHERE id = ?';
       params.push(req.params.id);
 
-      db.prepare(query).run(...params);
+      await db.run(query, params);
 
       // Build old and new value objects for changed fields only
       const oldValue: Record<string, unknown> = {};
@@ -548,10 +542,10 @@ router.patch(
 );
 
 // Actions
-router.put('/:id/draft', (req: Request<ReleaseIdParams>, res: Response): void => {
+router.put('/:id/draft', async (req: Request<ReleaseIdParams>, res: Response): Promise<void> => {
   try {
     const db = getDb();
-    db.prepare("UPDATE releases SET status = 'draft' WHERE id = ?").run(req.params.id);
+    await db.run("UPDATE releases SET status = 'draft' WHERE id = ?", [req.params.id]);
 
     logAudit({
       req,
@@ -568,13 +562,14 @@ router.put('/:id/draft', (req: Request<ReleaseIdParams>, res: Response): void =>
   }
 });
 
-router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void => {
+router.put('/:id/close', async (req: Request<ReleaseIdParams>, res: Response): Promise<void> => {
   try {
     const db = getDb();
     const authReq = req as AuthenticatedRequest;
-    db.prepare(
-      "UPDATE releases SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE id = ?"
-    ).run(authReq.user.eid, req.params.id);
+    await db.run(
+      "UPDATE releases SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE id = ?",
+      [authReq.user?.eid || 'anonymous', req.params.id]
+    );
 
     logAudit({
       req,
@@ -591,12 +586,13 @@ router.put('/:id/close', (req: Request<ReleaseIdParams>, res: Response): void =>
   }
 });
 
-router.put('/:id/reopen', (req: Request<ReleaseIdParams>, res: Response): void => {
+router.put('/:id/reopen', async (req: Request<ReleaseIdParams>, res: Response): Promise<void> => {
   try {
     const db = getDb();
-    db.prepare(
-      "UPDATE releases SET status = 'open', closed_at = NULL, closed_by = NULL WHERE id = ?"
-    ).run(req.params.id);
+    await db.run(
+      "UPDATE releases SET status = 'open', closed_at = NULL, closed_by = NULL WHERE id = ?",
+      [req.params.id]
+    );
 
     logAudit({
       req,
@@ -613,10 +609,10 @@ router.put('/:id/reopen', (req: Request<ReleaseIdParams>, res: Response): void =
   }
 });
 
-router.put('/:id/archive', (req: Request<ReleaseIdParams>, res: Response): void => {
+router.put('/:id/archive', async (req: Request<ReleaseIdParams>, res: Response): Promise<void> => {
   try {
     const db = getDb();
-    db.prepare("UPDATE releases SET status = 'archived' WHERE id = ?").run(req.params.id);
+    await db.run("UPDATE releases SET status = 'archived' WHERE id = ?", [req.params.id]);
 
     logAudit({
       req,
@@ -633,12 +629,12 @@ router.put('/:id/archive', (req: Request<ReleaseIdParams>, res: Response): void 
   }
 });
 
-router.delete('/:id', (req: Request<ReleaseIdParams>, res: Response): void => {
+router.delete('/:id', async (req: Request<ReleaseIdParams>, res: Response): Promise<void> => {
   try {
     const db = getDb();
-    const release = db.prepare('SELECT status FROM releases WHERE id = ?').get(req.params.id) as
-      | ReleaseRow
-      | undefined;
+    const release = await db.get<ReleaseRow>('SELECT status FROM releases WHERE id = ?', [
+      req.params.id,
+    ]);
     if (!release) {
       res.status(404).json({ success: false, error: 'Release not found' });
       return;
@@ -656,7 +652,7 @@ router.delete('/:id', (req: Request<ReleaseIdParams>, res: Response): void => {
     // - test_steps
     // - configuration_options
     // - test_runs
-    db.prepare('DELETE FROM releases WHERE id = ?').run(req.params.id);
+    await db.run('DELETE FROM releases WHERE id = ?', [req.params.id]);
 
     logAudit({
       req,

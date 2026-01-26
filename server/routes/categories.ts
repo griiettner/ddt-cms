@@ -1,7 +1,8 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
-import { getRegistryDb } from '../db/database.js';
-import type { CategoryRow, CountResult, DatabaseInstance } from '../types/index.js';
+import { getDb } from '../db/database.js';
+import type { DatabaseWrapper } from '../db/database.js';
+import type { CategoryRow, CountResult } from '../types/index.js';
 import { logAudit } from '../utils/auditLogger.js';
 
 const router: Router = express.Router();
@@ -40,16 +41,19 @@ interface CategoryFlat extends CategoryRow {
 /**
  * Build the path string for a category based on its parent
  */
-function buildPath(db: DatabaseInstance, parentId: number | null | undefined): string {
+async function buildPath(
+  db: DatabaseWrapper,
+  parentId: number | null | undefined
+): Promise<string> {
   if (!parentId) return '';
 
   interface ParentInfo {
     id: number;
     path: string;
   }
-  const parent = db.prepare('SELECT id, path FROM categories WHERE id = ?').get(parentId) as
-    | ParentInfo
-    | undefined;
+  const parent = await db.get<ParentInfo>('SELECT id, path FROM categories WHERE id = ?', [
+    parentId,
+  ]);
   if (!parent) return '';
 
   return parent.path ? `${parent.path}/${parent.id}` : `${parent.id}`;
@@ -58,63 +62,56 @@ function buildPath(db: DatabaseInstance, parentId: number | null | undefined): s
 /**
  * Get the level (depth) of a category based on its parent
  */
-function getLevel(db: DatabaseInstance, parentId: number | null | undefined): number {
+async function getLevel(db: DatabaseWrapper, parentId: number | null | undefined): Promise<number> {
   if (!parentId) return 0;
 
   interface LevelInfo {
     level: number;
   }
-  const parent = db.prepare('SELECT level FROM categories WHERE id = ?').get(parentId) as
-    | LevelInfo
-    | undefined;
+  const parent = await db.get<LevelInfo>('SELECT level FROM categories WHERE id = ?', [parentId]);
   return parent ? parent.level + 1 : 0;
 }
 
 /**
  * Rebuild nested set values (lft, rgt) for the entire tree
  */
-function rebuildNestedSet(db: DatabaseInstance): void {
+async function rebuildNestedSet(db: DatabaseWrapper): Promise<void> {
   let counter = 0;
 
   interface NodeId {
     id: number;
   }
 
-  function processNode(nodeId: number): void {
+  async function processNode(nodeId: number): Promise<void> {
     const lft = ++counter;
 
     // Get all children
-    const children = db
-      .prepare('SELECT id FROM categories WHERE parent_id = ? ORDER BY name')
-      .all(nodeId) as NodeId[];
+    const children = await db.all<NodeId>(
+      'SELECT id FROM categories WHERE parent_id = ? ORDER BY name',
+      [nodeId]
+    );
     for (const child of children) {
-      processNode(child.id);
+      await processNode(child.id);
     }
 
     const rgt = ++counter;
-    db.prepare('UPDATE categories SET lft = ?, rgt = ? WHERE id = ?').run(lft, rgt, nodeId);
+    await db.run('UPDATE categories SET lft = ?, rgt = ? WHERE id = ?', [lft, rgt, nodeId]);
   }
 
   // Process all root nodes
-  const roots = db
-    .prepare('SELECT id FROM categories WHERE parent_id IS NULL ORDER BY name')
-    .all() as NodeId[];
+  const roots = await db.all<NodeId>(
+    'SELECT id FROM categories WHERE parent_id IS NULL ORDER BY name'
+  );
   for (const root of roots) {
-    processNode(root.id);
+    await processNode(root.id);
   }
 }
 
 // GET /api/categories - List all categories as a tree
-router.get('/', (req: Request, res: Response): void => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const db = getRegistryDb();
-    const categories = db
-      .prepare(
-        `
-      SELECT * FROM categories ORDER BY lft, name
-    `
-      )
-      .all() as CategoryRow[];
+    const db = getDb();
+    const categories = await db.all<CategoryRow>(`SELECT * FROM categories ORDER BY lft, name`);
 
     // Build tree structure
     const buildTree = (
@@ -139,16 +136,10 @@ router.get('/', (req: Request, res: Response): void => {
 });
 
 // GET /api/categories/flat - List all categories flat (for dropdowns)
-router.get('/flat', (req: Request, res: Response): void => {
+router.get('/flat', async (req: Request, res: Response): Promise<void> => {
   try {
-    const db = getRegistryDb();
-    const categories = db
-      .prepare(
-        `
-      SELECT * FROM categories ORDER BY path, name
-    `
-      )
-      .all() as CategoryRow[];
+    const db = getDb();
+    const categories = await db.all<CategoryRow>(`SELECT * FROM categories ORDER BY path, name`);
 
     // Add indented display name for dropdowns
     const data: CategoryFlat[] = categories.map(
@@ -166,12 +157,12 @@ router.get('/flat', (req: Request, res: Response): void => {
 });
 
 // GET /api/categories/:id - Get category details
-router.get('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
+router.get('/:id', async (req: Request<CategoryIdParams>, res: Response): Promise<void> => {
   try {
-    const db = getRegistryDb();
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id) as
-      | CategoryRow
-      | undefined;
+    const db = getDb();
+    const category = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [
+      req.params.id,
+    ]);
 
     if (!category) {
       res.status(404).json({ success: false, error: 'Category not found' });
@@ -179,11 +170,11 @@ router.get('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
     }
 
     // Get children count
-    const childrenCount = (
-      db
-        .prepare('SELECT COUNT(*) as count FROM categories WHERE parent_id = ?')
-        .get(category.id) as CountResult
-    ).count;
+    const countResult = await db.get<CountResult>(
+      'SELECT COUNT(*) as count FROM categories WHERE parent_id = ?',
+      [category.id]
+    );
+    const childrenCount = countResult?.count ?? 0;
 
     const response: CategoryWithCount = { ...category, childrenCount };
     res.json({ success: true, data: response });
@@ -194,63 +185,66 @@ router.get('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
 });
 
 // POST /api/categories - Create a new category
-router.post('/', (req: Request<object, unknown, CreateCategoryBody>, res: Response): void => {
-  const { name, description, parent_id } = req.body;
+router.post(
+  '/',
+  async (req: Request<object, unknown, CreateCategoryBody>, res: Response): Promise<void> => {
+    const { name, description, parent_id } = req.body;
 
-  if (!name) {
-    res.status(400).json({ success: false, error: 'Category name is required' });
-    return;
+    if (!name) {
+      res.status(400).json({ success: false, error: 'Category name is required' });
+      return;
+    }
+
+    try {
+      const db = getDb();
+
+      // Build path and level based on parent
+      const path = await buildPath(db, parent_id);
+      const level = await getLevel(db, parent_id);
+
+      const result = await db.run(
+        `INSERT INTO categories (parent_id, name, description, path, level)
+       VALUES (?, ?, ?, ?, ?)`,
+        [parent_id ?? null, name, description || '', path, level]
+      );
+
+      // Rebuild nested set values
+      await rebuildNestedSet(db);
+
+      const newId = Number(result.lastInsertRowid);
+      const category = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [newId]);
+
+      logAudit({
+        req,
+        action: 'CREATE',
+        resourceType: 'category',
+        resourceId: newId,
+        resourceName: name,
+      });
+
+      res.json({ success: true, data: category });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-
-  try {
-    const db = getRegistryDb();
-
-    // Build path and level based on parent
-    const path = buildPath(db, parent_id);
-    const level = getLevel(db, parent_id);
-
-    const stmt = db.prepare(`
-      INSERT INTO categories (parent_id, name, description, path, level)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(parent_id || null, name, description || '', path, level);
-
-    // Rebuild nested set values
-    rebuildNestedSet(db);
-
-    const category = db
-      .prepare('SELECT * FROM categories WHERE id = ?')
-      .get(result.lastInsertRowid) as CategoryRow;
-
-    logAudit({
-      req,
-      action: 'CREATE',
-      resourceType: 'category',
-      resourceId: result.lastInsertRowid as number,
-      resourceName: name,
-    });
-
-    res.json({ success: true, data: category });
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+);
 
 // PATCH /api/categories/:id - Update category
 router.patch(
   '/:id',
-  (req: Request<CategoryIdParams, unknown, UpdateCategoryBody>, res: Response): void => {
+  async (
+    req: Request<CategoryIdParams, unknown, UpdateCategoryBody>,
+    res: Response
+  ): Promise<void> => {
     const { name, description, parent_id } = req.body;
     const { id } = req.params;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Check if category exists
-      const existing = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as
-        | CategoryRow
-        | undefined;
+      const existing = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id]);
       if (!existing) {
         res.status(404).json({ success: false, error: 'Category not found' });
         return;
@@ -267,9 +261,9 @@ router.patch(
         interface PathInfo {
           path: string;
         }
-        const potentialParent = db
-          .prepare('SELECT path FROM categories WHERE id = ?')
-          .get(parent_id) as PathInfo | undefined;
+        const potentialParent = await db.get<PathInfo>('SELECT path FROM categories WHERE id = ?', [
+          parent_id,
+        ]);
         if (potentialParent && potentialParent.path && potentialParent.path.includes(`/${id}/`)) {
           res.status(400).json({ success: false, error: 'Cannot set a descendant as parent' });
           return;
@@ -277,22 +271,21 @@ router.patch(
       }
 
       // Build new path and level
-      const newPath = buildPath(db, parent_id);
-      const newLevel = getLevel(db, parent_id);
+      const newPath = await buildPath(db, parent_id);
+      const newLevel = await getLevel(db, parent_id);
 
-      db.prepare(
-        `
-      UPDATE categories
-      SET name = ?, description = ?, parent_id = ?, path = ?, level = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `
-      ).run(
-        name || existing.name,
-        description !== undefined ? description : existing.description,
-        parent_id !== undefined ? parent_id || null : existing.parent_id,
-        newPath,
-        newLevel,
-        id
+      await db.run(
+        `UPDATE categories
+         SET name = ?, description = ?, parent_id = ?, path = ?, level = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          name || existing.name,
+          description !== undefined ? description : existing.description,
+          parent_id !== undefined ? (parent_id ?? null) : existing.parent_id,
+          newPath,
+          newLevel,
+          id,
+        ]
       );
 
       // Update paths of all descendants
@@ -301,34 +294,35 @@ router.patch(
         name: string;
       }
 
-      const updateDescendantPaths = (
+      const updateDescendantPaths = async (
         parentId: string | number,
         parentPath: string,
         parentLevel: number
-      ): void => {
-        const children = db
-          .prepare('SELECT id, name FROM categories WHERE parent_id = ?')
-          .all(parentId) as ChildInfo[];
+      ): Promise<void> => {
+        const children = await db.all<ChildInfo>(
+          'SELECT id, name FROM categories WHERE parent_id = ?',
+          [parentId]
+        );
         for (const child of children) {
           const childPath = parentPath ? `${parentPath}/${parentId}` : `${parentId}`;
           const childLevel = parentLevel + 1;
-          db.prepare('UPDATE categories SET path = ?, level = ? WHERE id = ?').run(
+          await db.run('UPDATE categories SET path = ?, level = ? WHERE id = ?', [
             childPath,
             childLevel,
-            child.id
-          );
-          updateDescendantPaths(child.id, childPath, childLevel);
+            child.id,
+          ]);
+          await updateDescendantPaths(child.id, childPath, childLevel);
         }
       };
 
       if (parent_id !== undefined) {
-        updateDescendantPaths(id, newPath, newLevel);
+        await updateDescendantPaths(id, newPath, newLevel);
       }
 
       // Rebuild nested set values
-      rebuildNestedSet(db);
+      await rebuildNestedSet(db);
 
-      const updated = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as CategoryRow;
+      const updated = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id]);
 
       logAudit({
         req,
@@ -347,27 +341,25 @@ router.patch(
 );
 
 // DELETE /api/categories/:id - Delete category (only if no test sets use it)
-router.delete('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
+router.delete('/:id', async (req: Request<CategoryIdParams>, res: Response): Promise<void> => {
   const { id } = req.params;
 
   try {
-    const db = getRegistryDb();
+    const db = getDb();
 
     // Check if category exists
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as
-      | CategoryRow
-      | undefined;
+    const category = await db.get<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id]);
     if (!category) {
       res.status(404).json({ success: false, error: 'Category not found' });
       return;
     }
 
     // Check if category has children
-    const childrenCount = (
-      db
-        .prepare('SELECT COUNT(*) as count FROM categories WHERE parent_id = ?')
-        .get(id) as CountResult
-    ).count;
+    const countResult = await db.get<CountResult>(
+      'SELECT COUNT(*) as count FROM categories WHERE parent_id = ?',
+      [id]
+    );
+    const childrenCount = countResult?.count ?? 0;
     if (childrenCount > 0) {
       res.status(400).json({
         success: false,
@@ -379,10 +371,10 @@ router.delete('/:id', (req: Request<CategoryIdParams>, res: Response): void => {
     // Note: We can't check test_sets usage here since they're in release DBs
     // The UI should handle this validation before allowing deletion
 
-    db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+    await db.run('DELETE FROM categories WHERE id = ?', [id]);
 
     // Rebuild nested set values
-    rebuildNestedSet(db);
+    await rebuildNestedSet(db);
 
     logAudit({
       req,

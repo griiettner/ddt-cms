@@ -115,60 +115,56 @@ interface IdResult {
 }
 
 // GET /api/reusable-cases - List all reusable cases
-router.get('/', (_req: Request, res: Response<ApiResponse<ReusableCaseWithStepCount[]>>): void => {
-  try {
-    const db = getDb();
-    const cases = db
-      .prepare(
-        `
-        SELECT
-          rc.*,
-          (SELECT COUNT(*) FROM reusable_case_steps WHERE reusable_case_id = rc.id) as step_count
-        FROM reusable_cases rc
-        ORDER BY rc.name ASC
-      `
-      )
-      .all() as ReusableCaseWithStepCount[];
+router.get(
+  '/',
+  async (_req: Request, res: Response<ApiResponse<ReusableCaseWithStepCount[]>>): Promise<void> => {
+    try {
+      const db = getDb();
+      const cases = await db.all<ReusableCaseWithStepCount>(
+        `SELECT
+        rc.*,
+        (SELECT COUNT(*) FROM reusable_case_steps WHERE reusable_case_id = rc.id) as step_count
+      FROM reusable_cases rc
+      ORDER BY rc.name ASC`
+      );
 
-    res.json({ success: true, data: cases });
-  } catch (err) {
-    const error = err as Error;
-    console.error('Error listing reusable cases:', error);
-    res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, data: cases });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error listing reusable cases:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 // GET /api/reusable-cases/:id - Get a reusable case with its steps
 router.get(
   '/:id',
-  (req: Request<IdParams>, res: Response<ApiResponse<ReusableCaseWithSteps>>): void => {
+  async (
+    req: Request<IdParams>,
+    res: Response<ApiResponse<ReusableCaseWithSteps>>
+  ): Promise<void> => {
     const { id } = req.params;
 
     try {
       const db = getDb();
 
-      const reusableCase = db
-        .prepare(
-          `
-        SELECT * FROM reusable_cases WHERE id = ?
-      `
-        )
-        .get(id) as ReusableCaseRow | undefined;
+      const reusableCase = await db.get<ReusableCaseRow>(
+        `SELECT * FROM reusable_cases WHERE id = ?`,
+        [id]
+      );
 
       if (!reusableCase) {
         res.status(404).json({ success: false, error: 'Reusable case not found' });
         return;
       }
 
-      const steps = db
-        .prepare(
-          `
-        SELECT * FROM reusable_case_steps
-        WHERE reusable_case_id = ?
-        ORDER BY order_index ASC
-      `
-        )
-        .all(id) as ReusableCaseStepRow[];
+      const steps = await db.all<ReusableCaseStepRow>(
+        `SELECT * FROM reusable_case_steps
+         WHERE reusable_case_id = ?
+         ORDER BY order_index ASC`,
+        [id]
+      );
 
       res.json({
         success: true,
@@ -185,7 +181,10 @@ router.get(
 // POST /api/reusable-cases - Create a new reusable case
 router.post(
   '/',
-  (req: AuthenticatedRequest, res: Response<ApiResponse<CreateReusableCaseResponse>>): void => {
+  async (
+    req: AuthenticatedRequest,
+    res: Response<ApiResponse<CreateReusableCaseResponse>>
+  ): Promise<void> => {
     const { name, description, steps } = req.body as CreateReusableCaseBody;
     const user = req.user?.eid || 'anonymous';
 
@@ -198,48 +197,45 @@ router.post(
       const db = getDb();
 
       // Create the reusable case
-      const result = db
-        .prepare(
-          `
-        INSERT INTO reusable_cases (name, description, created_by)
-        VALUES (?, ?, ?)
-      `
-        )
-        .run(name, description || '', user);
+      const result = await db.run(
+        `INSERT INTO reusable_cases (name, description, created_by)
+         VALUES (?, ?, ?)`,
+        [name, description || '', user]
+      );
 
-      const reusableCaseId = result.lastInsertRowid;
+      const reusableCaseId = Number(result.lastInsertRowid);
 
       // Insert steps if provided
       if (steps && steps.length > 0) {
-        const insertStep = db.prepare(`
-          INSERT INTO reusable_case_steps (
-            reusable_case_id, order_index, step_definition, type, element_id,
-            action, action_result, select_config_id, match_config_id, required, expected_results
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        steps.forEach((step, index) => {
-          insertStep.run(
-            reusableCaseId,
-            step.order_index ?? index,
-            step.step_definition || '',
-            step.type || null,
-            step.element_id || null,
-            step.action || null,
-            step.action_result || null,
-            step.select_config_id || null,
-            step.match_config_id || null,
-            step.required ? 1 : 0,
-            step.expected_results || null
+        for (let index = 0; index < steps.length; index++) {
+          const step = steps[index];
+          await db.run(
+            `INSERT INTO reusable_case_steps (
+              reusable_case_id, order_index, step_definition, type, element_id,
+              action, action_result, select_config_id, match_config_id, required, expected_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reusableCaseId,
+              step.order_index ?? index,
+              step.step_definition || '',
+              step.type || null,
+              step.element_id || null,
+              step.action || null,
+              step.action_result || null,
+              step.select_config_id || null,
+              step.match_config_id || null,
+              step.required ? 1 : 0,
+              step.expected_results || null,
+            ]
           );
-        });
+        }
       }
 
       logAudit({
         req,
         action: 'CREATE',
         resourceType: 'reusable_case',
-        resourceId: reusableCaseId as number,
+        resourceId: reusableCaseId,
         resourceName: name,
         details: { stepCount: steps?.length || 0 },
       });
@@ -259,31 +255,28 @@ router.post(
 // PUT /api/reusable-cases/:id - Update a reusable case
 router.put(
   '/:id',
-  (
+  async (
     req: Request<IdParams, unknown, UpdateReusableCaseBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { id } = req.params;
     const { name, description } = req.body;
 
     try {
       const db = getDb();
 
-      const existing = db.prepare('SELECT id FROM reusable_cases WHERE id = ?').get(id) as
-        | IdResult
-        | undefined;
+      const existing = await db.get<IdResult>('SELECT id FROM reusable_cases WHERE id = ?', [id]);
       if (!existing) {
         res.status(404).json({ success: false, error: 'Reusable case not found' });
         return;
       }
 
-      db.prepare(
-        `
-        UPDATE reusable_cases
-        SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `
-      ).run(name, description || '', id);
+      await db.run(
+        `UPDATE reusable_cases
+         SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [name || '', description || '', id]
+      );
 
       logAudit({
         req,
@@ -303,46 +296,50 @@ router.put(
 );
 
 // DELETE /api/reusable-cases/:id - Delete a reusable case
-router.delete('/:id', (req: Request<IdParams>, res: Response<ApiResponse<undefined>>): void => {
-  const { id } = req.params;
+router.delete(
+  '/:id',
+  async (req: Request<IdParams>, res: Response<ApiResponse<undefined>>): Promise<void> => {
+    const { id } = req.params;
 
-  try {
-    const db = getDb();
+    try {
+      const db = getDb();
 
-    const existing = db.prepare('SELECT id, name FROM reusable_cases WHERE id = ?').get(id) as
-      | { id: number; name: string }
-      | undefined;
-    if (!existing) {
-      res.status(404).json({ success: false, error: 'Reusable case not found' });
-      return;
+      const existing = await db.get<{ id: number; name: string }>(
+        'SELECT id, name FROM reusable_cases WHERE id = ?',
+        [id]
+      );
+      if (!existing) {
+        res.status(404).json({ success: false, error: 'Reusable case not found' });
+        return;
+      }
+
+      // Steps are deleted automatically via CASCADE
+      await db.run('DELETE FROM reusable_cases WHERE id = ?', [id]);
+
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'reusable_case',
+        resourceId: parseInt(id),
+        resourceName: existing.name,
+      });
+
+      res.json({ success: true, data: undefined });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error deleting reusable case:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-
-    // Steps are deleted automatically via CASCADE
-    db.prepare('DELETE FROM reusable_cases WHERE id = ?').run(id);
-
-    logAudit({
-      req,
-      action: 'DELETE',
-      resourceType: 'reusable_case',
-      resourceId: parseInt(id),
-      resourceName: existing.name,
-    });
-
-    res.json({ success: true, data: undefined });
-  } catch (err) {
-    const error = err as Error;
-    console.error('Error deleting reusable case:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
-});
+);
 
 // POST /api/reusable-cases/:id/copy-to - Copy a reusable case to a test set
 router.post(
   '/:id/copy-to',
-  (
+  async (
     req: Request<IdParams, unknown, CopyToBody>,
     res: Response<ApiResponse<CopyToResponse>>
-  ): void => {
+  ): Promise<void> => {
     const { id } = req.params;
     const { releaseId, testSetId } = req.body;
 
@@ -358,13 +355,10 @@ router.post(
       const db = getDb();
 
       // Get the reusable case
-      const reusableCase = db
-        .prepare(
-          `
-        SELECT * FROM reusable_cases WHERE id = ?
-      `
-        )
-        .get(id) as ReusableCaseRow | undefined;
+      const reusableCase = await db.get<ReusableCaseRow>(
+        `SELECT * FROM reusable_cases WHERE id = ?`,
+        [id]
+      );
 
       if (!reusableCase) {
         res.status(404).json({ success: false, error: 'Reusable case not found' });
@@ -372,82 +366,63 @@ router.post(
       }
 
       // Get the steps
-      const steps = db
-        .prepare(
-          `
-        SELECT * FROM reusable_case_steps
-        WHERE reusable_case_id = ?
-        ORDER BY order_index ASC
-      `
-        )
-        .all(id) as ReusableCaseStepRow[];
+      const steps = await db.all<ReusableCaseStepRow>(
+        `SELECT * FROM reusable_case_steps
+         WHERE reusable_case_id = ?
+         ORDER BY order_index ASC`,
+        [id]
+      );
 
       // Get max order_index for test cases in this test set
-      const maxOrder = db
-        .prepare(
-          `
-        SELECT COALESCE(MAX(order_index), -1) as max_order
-        FROM test_cases WHERE test_set_id = ? AND release_id = ?
-      `
-        )
-        .get(testSetId, releaseId) as MaxOrderResult;
+      const maxOrder = await db.get<MaxOrderResult>(
+        `SELECT COALESCE(MAX(order_index), -1) as max_order
+         FROM test_cases WHERE test_set_id = ? AND release_id = ?`,
+        [testSetId, releaseId]
+      );
       const newOrderIndex = (maxOrder?.max_order ?? -1) + 1;
 
       // Create the test case in the unified database with release_id
-      const caseResult = db
-        .prepare(
-          `
-        INSERT INTO test_cases (release_id, test_set_id, name, description, order_index)
-        VALUES (?, ?, ?, ?, ?)
-      `
-        )
-        .run(
-          releaseId,
-          testSetId,
-          reusableCase.name,
-          reusableCase.description || '',
-          newOrderIndex
-        );
+      const caseResult = await db.run(
+        `INSERT INTO test_cases (release_id, test_set_id, name, description, order_index)
+         VALUES (?, ?, ?, ?, ?)`,
+        [releaseId, testSetId, reusableCase.name, reusableCase.description || '', newOrderIndex]
+      );
 
-      const newCaseId = caseResult.lastInsertRowid;
+      const newCaseId = Number(caseResult.lastInsertRowid);
 
       // Create a default scenario for this case with release_id
-      const scenarioResult = db
-        .prepare(
-          `
-        INSERT INTO test_scenarios (release_id, test_case_id, name, order_index)
-        VALUES (?, ?, ?, 0)
-      `
-        )
-        .run(releaseId, newCaseId, 'Default Scenario');
+      const scenarioResult = await db.run(
+        `INSERT INTO test_scenarios (release_id, test_case_id, name, order_index)
+         VALUES (?, ?, ?, 0)`,
+        [releaseId, newCaseId, 'Default Scenario']
+      );
 
-      const newScenarioId = scenarioResult.lastInsertRowid;
+      const newScenarioId = Number(scenarioResult.lastInsertRowid);
 
       // Copy the steps to the new scenario with release_id
       if (steps.length > 0) {
-        const insertStep = db.prepare(`
-          INSERT INTO test_steps (
-            release_id, test_scenario_id, order_index, step_definition, type, element_id,
-            action, action_result, select_config_id, match_config_id, required, expected_results
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        steps.forEach((step) => {
-          insertStep.run(
-            releaseId,
-            newScenarioId,
-            step.order_index,
-            step.step_definition || '',
-            step.type || null,
-            step.element_id || null,
-            step.action || null,
-            step.action_result || null,
-            step.select_config_id || null,
-            step.match_config_id || null,
-            step.required ? 1 : 0,
-            step.expected_results || null
+        for (const step of steps) {
+          await db.run(
+            `INSERT INTO test_steps (
+              release_id, test_scenario_id, order_index, step_definition, type, element_id,
+              action, action_result, select_config_id, match_config_id, required, expected_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              releaseId,
+              newScenarioId,
+              step.order_index,
+              step.step_definition || '',
+              step.type || null,
+              step.element_id || null,
+              step.action || null,
+              step.action_result || null,
+              step.select_config_id || null,
+              step.match_config_id || null,
+              step.required ? 1 : 0,
+              step.expected_results || null,
+            ]
           );
-        });
+        }
       }
 
       logAudit({
@@ -479,7 +454,10 @@ router.post(
 // POST /api/reusable-cases/from-case - Create a reusable case from an existing test case
 router.post(
   '/from-case',
-  (req: AuthenticatedRequest, res: Response<ApiResponse<FromCaseResponse>>): void => {
+  async (
+    req: AuthenticatedRequest,
+    res: Response<ApiResponse<FromCaseResponse>>
+  ): Promise<void> => {
     const { releaseId, caseId, name, description } = req.body as FromCaseBody;
     const user = req.user?.eid || 'anonymous';
 
@@ -495,13 +473,10 @@ router.post(
       const db = getDb();
 
       // Get the test case from the unified database
-      const testCase = db
-        .prepare(
-          `
-        SELECT * FROM test_cases WHERE id = ? AND release_id = ?
-      `
-        )
-        .get(caseId, releaseId) as TestCaseRow | undefined;
+      const testCase = await db.get<TestCaseRow>(
+        `SELECT * FROM test_cases WHERE id = ? AND release_id = ?`,
+        [caseId, releaseId]
+      );
 
       if (!testCase) {
         res.status(404).json({ success: false, error: 'Test case not found' });
@@ -509,25 +484,19 @@ router.post(
       }
 
       // Get all scenarios and their steps for this case
-      const scenarios = db
-        .prepare(
-          `
-        SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC
-      `
-        )
-        .all(caseId, releaseId) as TestScenarioRow[];
+      const scenarios = await db.all<TestScenarioRow>(
+        `SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC`,
+        [caseId, releaseId]
+      );
 
       // Collect all steps from all scenarios
       const allSteps: (TestStepRow & { order_index: number })[] = [];
       let stepIndex = 0;
       for (const scenario of scenarios) {
-        const steps = db
-          .prepare(
-            `
-          SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC
-        `
-          )
-          .all(scenario.id, releaseId) as TestStepRow[];
+        const steps = await db.all<TestStepRow>(
+          `SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC`,
+          [scenario.id, releaseId]
+        );
 
         for (const step of steps) {
           allSteps.push({ ...step, order_index: stepIndex++ });
@@ -538,41 +507,37 @@ router.post(
       const reusableName = name || testCase.name;
       const reusableDesc = description || testCase.description;
 
-      const result = db
-        .prepare(
-          `
-        INSERT INTO reusable_cases (name, description, created_by)
-        VALUES (?, ?, ?)
-      `
-        )
-        .run(reusableName, reusableDesc || '', user);
+      const result = await db.run(
+        `INSERT INTO reusable_cases (name, description, created_by)
+         VALUES (?, ?, ?)`,
+        [reusableName, reusableDesc || '', user]
+      );
 
-      const reusableCaseId = result.lastInsertRowid;
+      const reusableCaseId = Number(result.lastInsertRowid);
 
       // Insert all steps
       if (allSteps.length > 0) {
-        const insertStep = db.prepare(`
-          INSERT INTO reusable_case_steps (
-            reusable_case_id, order_index, step_definition, type, element_id,
-            action, action_result, select_config_id, match_config_id, required, expected_results
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        allSteps.forEach((step) => {
-          insertStep.run(
-            reusableCaseId,
-            step.order_index,
-            step.step_definition || '',
-            step.type || null,
-            step.element_id || null,
-            step.action || null,
-            step.action_result || null,
-            step.select_config_id || null,
-            step.match_config_id || null,
-            step.required ? 1 : 0,
-            step.expected_results || null
+        for (const step of allSteps) {
+          await db.run(
+            `INSERT INTO reusable_case_steps (
+              reusable_case_id, order_index, step_definition, type, element_id,
+              action, action_result, select_config_id, match_config_id, required, expected_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              reusableCaseId,
+              step.order_index,
+              step.step_definition || '',
+              step.type || null,
+              step.element_id || null,
+              step.action || null,
+              step.action_result || null,
+              step.select_config_id || null,
+              step.match_config_id || null,
+              step.required ? 1 : 0,
+              step.expected_results || null,
+            ]
           );
-        });
+        }
       }
 
       logAudit({
@@ -604,20 +569,20 @@ router.post(
 // GET /api/reusable-cases/:id/steps - Get steps for a reusable case
 router.get(
   '/:id/steps',
-  (req: Request<IdParams>, res: Response<ApiResponse<ReusableCaseStepRow[]>>): void => {
+  async (
+    req: Request<IdParams>,
+    res: Response<ApiResponse<ReusableCaseStepRow[]>>
+  ): Promise<void> => {
     const { id } = req.params;
 
     try {
       const db = getDb();
-      const steps = db
-        .prepare(
-          `
-        SELECT * FROM reusable_case_steps
-        WHERE reusable_case_id = ?
-        ORDER BY order_index ASC
-      `
-        )
-        .all(id) as ReusableCaseStepRow[];
+      const steps = await db.all<ReusableCaseStepRow>(
+        `SELECT * FROM reusable_case_steps
+         WHERE reusable_case_id = ?
+         ORDER BY order_index ASC`,
+        [id]
+      );
 
       res.json({ success: true, data: steps });
     } catch (err) {
@@ -631,10 +596,10 @@ router.get(
 // POST /api/reusable-cases/:id/steps - Add a step to a reusable case
 router.post(
   '/:id/steps',
-  (
+  async (
     req: Request<IdParams, unknown, ReusableCaseStepInput>,
     res: Response<ApiResponse<AddStepResponse>>
-  ): void => {
+  ): Promise<void> => {
     const { id } = req.params;
     const step = req.body;
 
@@ -642,26 +607,19 @@ router.post(
       const db = getDb();
 
       // Get max order_index
-      const maxOrder = db
-        .prepare(
-          `
-        SELECT COALESCE(MAX(order_index), -1) as max_order
-        FROM reusable_case_steps WHERE reusable_case_id = ?
-      `
-        )
-        .get(id) as MaxOrderResult;
+      const maxOrder = await db.get<MaxOrderResult>(
+        `SELECT COALESCE(MAX(order_index), -1) as max_order
+         FROM reusable_case_steps WHERE reusable_case_id = ?`,
+        [id]
+      );
       const newOrderIndex = (maxOrder?.max_order ?? -1) + 1;
 
-      const result = db
-        .prepare(
-          `
-        INSERT INTO reusable_case_steps (
+      const result = await db.run(
+        `INSERT INTO reusable_case_steps (
           reusable_case_id, order_index, step_definition, type, element_id,
           action, action_result, select_config_id, match_config_id, required, expected_results
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-        )
-        .run(
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
           id,
           step.order_index ?? newOrderIndex,
           step.step_definition || '',
@@ -672,12 +630,13 @@ router.post(
           step.select_config_id || null,
           step.match_config_id || null,
           step.required ? 1 : 0,
-          step.expected_results || null
-        );
+          step.expected_results || null,
+        ]
+      );
 
       res.json({
         success: true,
-        data: { id: result.lastInsertRowid, order_index: newOrderIndex },
+        data: { id: Number(result.lastInsertRowid), order_index: newOrderIndex },
       });
     } catch (err) {
       const error = err as Error;
@@ -690,10 +649,10 @@ router.post(
 // PATCH /api/reusable-cases/:id/steps/:stepId - Update a step in a reusable case
 router.patch(
   '/:id/steps/:stepId',
-  (
+  async (
     req: Request<StepParams, unknown, Record<string, unknown>>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { id, stepId } = req.params;
     const updates = req.body;
 
@@ -703,15 +662,14 @@ router.patch(
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
         .join(', ');
-      const values = Object.values(updates);
+      const values = Object.values(updates) as (string | number | null)[];
 
-      db.prepare(
-        `
-        UPDATE reusable_case_steps
-        SET ${fields}
-        WHERE id = ? AND reusable_case_id = ?
-      `
-      ).run(...values, stepId, id);
+      await db.run(
+        `UPDATE reusable_case_steps
+         SET ${fields}
+         WHERE id = ? AND reusable_case_id = ?`,
+        [...values, stepId, id]
+      );
 
       res.json({ success: true, data: undefined });
     } catch (err) {
@@ -725,17 +683,16 @@ router.patch(
 // DELETE /api/reusable-cases/:id/steps/:stepId - Delete a step from a reusable case
 router.delete(
   '/:id/steps/:stepId',
-  (req: Request<StepParams>, res: Response<ApiResponse<undefined>>): void => {
+  async (req: Request<StepParams>, res: Response<ApiResponse<undefined>>): Promise<void> => {
     const { id, stepId } = req.params;
 
     try {
       const db = getDb();
-      db.prepare(
-        `
-        DELETE FROM reusable_case_steps
-        WHERE id = ? AND reusable_case_id = ?
-      `
-      ).run(stepId, id);
+      await db.run(
+        `DELETE FROM reusable_case_steps
+         WHERE id = ? AND reusable_case_id = ?`,
+        [stepId, id]
+      );
 
       res.json({ success: true, data: undefined });
     } catch (err) {
@@ -749,29 +706,35 @@ router.delete(
 // PUT /api/reusable-cases/:id/steps/reorder - Reorder steps in a reusable case
 router.put(
   '/:id/steps/reorder',
-  (
+  async (
     req: Request<IdParams, unknown, ReorderStepsBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { id } = req.params;
     const { steps } = req.body;
 
     try {
       const db = getDb();
 
-      const updateStep = db.prepare(`
-        UPDATE reusable_case_steps
-        SET order_index = ?
-        WHERE id = ? AND reusable_case_id = ?
-      `);
+      // Start transaction
+      await db.exec('BEGIN TRANSACTION');
 
-      const reorderTransaction = db.transaction((stepsToReorder: { id: number }[]) => {
-        stepsToReorder.forEach((step, index) => {
-          updateStep.run(index, step.id, id);
-        });
-      });
+      try {
+        for (let index = 0; index < steps.length; index++) {
+          const step = steps[index];
+          await db.run(
+            `UPDATE reusable_case_steps
+             SET order_index = ?
+             WHERE id = ? AND reusable_case_id = ?`,
+            [index, step.id, id]
+          );
+        }
 
-      reorderTransaction(steps);
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       res.json({ success: true, data: undefined });
     } catch (err) {
@@ -785,43 +748,52 @@ router.put(
 // PUT /api/reusable-cases/:id/steps - Sync all steps (bulk update)
 router.put(
   '/:id/steps',
-  (req: Request<IdParams, unknown, SyncStepsBody>, res: Response<ApiResponse<undefined>>): void => {
+  async (
+    req: Request<IdParams, unknown, SyncStepsBody>,
+    res: Response<ApiResponse<undefined>>
+  ): Promise<void> => {
     const { id } = req.params;
     const { steps } = req.body;
 
     try {
       const db = getDb();
 
-      const syncTransaction = db.transaction((stepsToSync: ReusableCaseStepInput[]) => {
+      // Start transaction
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
         // Delete existing steps
-        db.prepare('DELETE FROM reusable_case_steps WHERE reusable_case_id = ?').run(id);
+        await db.run('DELETE FROM reusable_case_steps WHERE reusable_case_id = ?', [id]);
 
         // Insert new steps
-        const insertStep = db.prepare(`
-          INSERT INTO reusable_case_steps (
-            reusable_case_id, order_index, step_definition, type, element_id,
-            action, action_result, select_config_id, match_config_id, required, expected_results
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        stepsToSync.forEach((step, index) => {
-          insertStep.run(
-            id,
-            step.order_index ?? index,
-            step.step_definition || '',
-            step.type || null,
-            step.element_id || null,
-            step.action || null,
-            step.action_result || null,
-            step.select_config_id || null,
-            step.match_config_id || null,
-            step.required ? 1 : 0,
-            step.expected_results || null
+        for (let index = 0; index < steps.length; index++) {
+          const step = steps[index];
+          await db.run(
+            `INSERT INTO reusable_case_steps (
+              reusable_case_id, order_index, step_definition, type, element_id,
+              action, action_result, select_config_id, match_config_id, required, expected_results
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              step.order_index ?? index,
+              step.step_definition || '',
+              step.type || null,
+              step.element_id || null,
+              step.action || null,
+              step.action_result || null,
+              step.select_config_id || null,
+              step.match_config_id || null,
+              step.required ? 1 : 0,
+              step.expected_results || null,
+            ]
           );
-        });
-      });
+        }
 
-      syncTransaction(steps);
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       res.json({ success: true, data: undefined });
     } catch (err) {

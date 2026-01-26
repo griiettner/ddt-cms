@@ -279,13 +279,15 @@ class TestExecutionQueue extends EventEmitter {
   /**
    * Save test results to database
    */
-  private saveResults(result: PlaywrightRunResult): void {
+  private async saveResults(result: PlaywrightRunResult): Promise<void> {
     try {
       const db = getDb();
 
-      db.transaction(() => {
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
         // Update test_runs table
-        db.prepare(
+        await db.run(
           `
           UPDATE test_runs SET
             status = ?,
@@ -296,41 +298,48 @@ class TestExecutionQueue extends EventEmitter {
             failed_steps = ?,
             video_path = ?
           WHERE id = ?
-        `
-        ).run(
-          result.status,
-          result.durationMs,
-          result.totalScenarios,
-          result.totalSteps,
-          result.passedSteps,
-          result.failedSteps,
-          result.videoPath || null,
-          result.testRunId
+        `,
+          [
+            result.status,
+            result.durationMs,
+            result.totalScenarios,
+            result.totalSteps,
+            result.passedSteps,
+            result.failedSteps,
+            result.videoPath || null,
+            result.testRunId,
+          ]
         );
 
         // Insert step results
-        const insertStep = db.prepare(`
-          INSERT INTO test_run_steps (
-            test_run_id, test_step_id, scenario_id, scenario_name,
-            case_name, step_definition, expected_results, status, error_message, duration_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
         for (const step of result.steps) {
-          insertStep.run(
-            result.testRunId,
-            step.testStepId,
-            step.scenarioId,
-            step.scenarioName,
-            step.caseName,
-            step.stepDefinition,
-            step.expectedResults || null,
-            step.status,
-            step.errorMessage || null,
-            step.durationMs
+          await db.run(
+            `
+            INSERT INTO test_run_steps (
+              test_run_id, test_step_id, scenario_id, scenario_name,
+              case_name, step_definition, expected_results, status, error_message, duration_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+            [
+              result.testRunId,
+              step.testStepId,
+              step.scenarioId,
+              step.scenarioName,
+              step.caseName,
+              step.stepDefinition,
+              step.expectedResults || null,
+              step.status,
+              step.errorMessage || null,
+              step.durationMs,
+            ]
           );
         }
-      })();
+
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       console.log(`[Queue] Saved results for test run ${result.testRunId}`);
     } catch (err) {
@@ -341,17 +350,18 @@ class TestExecutionQueue extends EventEmitter {
   /**
    * Mark a test run as failed
    */
-  private markFailed(testRunId: number, errorMessage: string): void {
+  private async markFailed(testRunId: number, errorMessage: string): Promise<void> {
     try {
       const db = getDb();
-      db.prepare(
+      await db.run(
         `
         UPDATE test_runs SET
           status = 'failed',
           failed_details = ?
         WHERE id = ?
-      `
-      ).run(JSON.stringify([{ error: errorMessage }]), testRunId);
+      `,
+        [JSON.stringify([{ error: errorMessage }]), testRunId]
+      );
     } catch (err) {
       console.error(`[Queue] Failed to mark test run ${testRunId} as failed:`, err);
     }
@@ -364,15 +374,14 @@ export const testExecutionQueue = new TestExecutionQueue();
 /**
  * Get step results for a test run
  */
-export function getTestRunSteps(testRunId: number): TestRunStepRow[] {
+export async function getTestRunSteps(testRunId: number): Promise<TestRunStepRow[]> {
   const db = getDb();
-  return db
-    .prepare(
-      `
+  return await db.all<TestRunStepRow>(
+    `
       SELECT * FROM test_run_steps
       WHERE test_run_id = ?
       ORDER BY id ASC
-    `
-    )
-    .all(testRunId) as TestRunStepRow[];
+    `,
+    [testRunId]
+  );
 }

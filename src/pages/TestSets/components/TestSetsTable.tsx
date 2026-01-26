@@ -67,7 +67,7 @@ function TestSetsTable({
                     </Link>
                   </td>
                   <td className="text-sm text-co-gray-600">
-                    {ts.category?.name || (
+                    {ts.category?.displayPath || ts.category?.name || (
                       <span className="text-co-gray-400 italic">Uncategorized</span>
                     )}
                   </td>

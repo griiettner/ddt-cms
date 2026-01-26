@@ -1,5 +1,6 @@
 import { getDb } from '../db/database.js';
-import type { DatabaseInstance, CountResult, TestRunRow } from '../types/index.js';
+import type { DatabaseWrapper } from '../db/database.js';
+import type { CountResult, TestRunRow } from '../types/index.js';
 
 /**
  * Test run with release number included
@@ -62,38 +63,34 @@ const parseRecentRuns = (runs: TestRunWithRelease[]): ParsedTestRun[] => {
  * @param releaseId - Optional release ID
  * @returns Dashboard statistics
  */
-export const getDashboardStats = (releaseId?: string | number): DashboardStats => {
-  const db: DatabaseInstance = getDb();
+export const getDashboardStats = async (releaseId?: string | number): Promise<DashboardStats> => {
+  const db: DatabaseWrapper = getDb();
 
   if (!releaseId) {
     // Global stats - query all data from the unified database
-    const totalReleases = (
-      db.prepare('SELECT COUNT(*) as count FROM releases').get() as CountResult
-    ).count;
+    const totalReleasesResult = await db.get<CountResult>('SELECT COUNT(*) as count FROM releases');
+    const totalReleases = totalReleasesResult?.count || 0;
 
-    const totalSets = (db.prepare('SELECT COUNT(*) as count FROM test_sets').get() as CountResult)
-      .count;
+    const totalSetsResult = await db.get<CountResult>('SELECT COUNT(*) as count FROM test_sets');
+    const totalSets = totalSetsResult?.count || 0;
 
-    const totalCases = (db.prepare('SELECT COUNT(*) as count FROM test_cases').get() as CountResult)
-      .count;
+    const totalCasesResult = await db.get<CountResult>('SELECT COUNT(*) as count FROM test_cases');
+    const totalCases = totalCasesResult?.count || 0;
 
-    const totalScenarios = (
-      db.prepare('SELECT COUNT(*) as count FROM test_scenarios').get() as CountResult
-    ).count;
+    const totalScenariosResult = await db.get<CountResult>(
+      'SELECT COUNT(*) as count FROM test_scenarios'
+    );
+    const totalScenarios = totalScenariosResult?.count || 0;
 
-    const totalSteps = (db.prepare('SELECT COUNT(*) as count FROM test_steps').get() as CountResult)
-      .count;
+    const totalStepsResult = await db.get<CountResult>('SELECT COUNT(*) as count FROM test_steps');
+    const totalSteps = totalStepsResult?.count || 0;
 
-    const recentRunsRaw = db
-      .prepare(
-        `
+    const recentRunsRaw = await db.all<TestRunWithRelease>(`
       SELECT tr.*, r.release_number
       FROM test_runs tr
       LEFT JOIN releases r ON tr.release_id = r.id
       ORDER BY tr.executed_at DESC LIMIT 10
-    `
-      )
-      .all() as TestRunWithRelease[];
+    `);
     const recentRuns = parseRecentRuns(recentRunsRaw);
 
     // Get pass/fail from last run
@@ -114,42 +111,41 @@ export const getDashboardStats = (releaseId?: string | number): DashboardStats =
   }
 
   // Release specific stats - all from the unified database filtered by release_id
-  const totalTestSets = (
-    db
-      .prepare('SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?')
-      .get(releaseId) as CountResult
-  ).count;
+  const totalTestSetsResult = await db.get<CountResult>(
+    'SELECT COUNT(*) as count FROM test_sets WHERE release_id = ?',
+    [releaseId]
+  );
+  const totalTestSets = totalTestSetsResult?.count || 0;
 
-  const totalTestCases = (
-    db
-      .prepare('SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?')
-      .get(releaseId) as CountResult
-  ).count;
+  const totalTestCasesResult = await db.get<CountResult>(
+    'SELECT COUNT(*) as count FROM test_cases WHERE release_id = ?',
+    [releaseId]
+  );
+  const totalTestCases = totalTestCasesResult?.count || 0;
 
-  const totalScenarios = (
-    db
-      .prepare('SELECT COUNT(*) as count FROM test_scenarios WHERE release_id = ?')
-      .get(releaseId) as CountResult
-  ).count;
+  const totalScenariosResult = await db.get<CountResult>(
+    'SELECT COUNT(*) as count FROM test_scenarios WHERE release_id = ?',
+    [releaseId]
+  );
+  const totalScenarios = totalScenariosResult?.count || 0;
 
-  const totalSteps = (
-    db
-      .prepare('SELECT COUNT(*) as count FROM test_steps WHERE release_id = ?')
-      .get(releaseId) as CountResult
-  ).count;
+  const totalStepsResult = await db.get<CountResult>(
+    'SELECT COUNT(*) as count FROM test_steps WHERE release_id = ?',
+    [releaseId]
+  );
+  const totalSteps = totalStepsResult?.count || 0;
 
   // Get recent runs for this release
-  const recentRunsRaw = db
-    .prepare(
-      `
+  const recentRunsRaw = await db.all<TestRunWithRelease>(
+    `
     SELECT tr.*, r.release_number
     FROM test_runs tr
     LEFT JOIN releases r ON tr.release_id = r.id
     WHERE tr.release_id = ?
     ORDER BY tr.executed_at DESC LIMIT 10
-  `
-    )
-    .all(releaseId) as TestRunWithRelease[];
+  `,
+    [releaseId]
+  );
   const recentRuns = parseRecentRuns(recentRunsRaw);
 
   // Get pass/fail from last test run

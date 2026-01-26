@@ -44,7 +44,10 @@ interface StepData {
 // GET /api/test-steps/:releaseId?scenarioId=X - List steps
 router.get(
   '/:releaseId',
-  (req: Request<ReleaseIdParams, unknown, unknown, StepsListQuery>, res: Response): void => {
+  async (
+    req: Request<ReleaseIdParams, unknown, unknown, StepsListQuery>,
+    res: Response
+  ): Promise<void> => {
     const { scenarioId } = req.query;
     if (!scenarioId) {
       res.status(400).json({ success: false, error: 'scenarioId is required' });
@@ -53,11 +56,10 @@ router.get(
 
     try {
       const db = getDb();
-      const steps = db
-        .prepare(
-          'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC'
-        )
-        .all(scenarioId, req.params.releaseId) as TestStepRow[];
+      const steps = await db.all<TestStepRow>(
+        'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC',
+        [scenarioId, req.params.releaseId]
+      );
       res.json({ success: true, data: steps });
     } catch (err) {
       const error = err as Error;
@@ -69,7 +71,7 @@ router.get(
 // PATCH /api/test-steps/:releaseId/:id - Partial update a step
 router.patch(
   '/:releaseId/:id',
-  (req: Request<StepIdParams, unknown, UpdateStepBody>, res: Response): void => {
+  async (req: Request<StepIdParams, unknown, UpdateStepBody>, res: Response): Promise<void> => {
     const { releaseId, id } = req.params;
     const updates = req.body;
 
@@ -77,9 +79,10 @@ router.patch(
       const db = getDb();
 
       // Fetch the old step data for audit logging
-      const oldStep = db
-        .prepare('SELECT * FROM test_steps WHERE id = ? AND release_id = ?')
-        .get(id, releaseId) as Record<string, unknown> | undefined;
+      const oldStep = await db.get<Record<string, unknown>>(
+        'SELECT * FROM test_steps WHERE id = ? AND release_id = ?',
+        [id, releaseId]
+      );
 
       const fields = Object.keys(updates)
         .map((f) => `${f} = ?`)
@@ -90,8 +93,11 @@ router.patch(
         return val as string | number | null;
       });
 
-      const stmt = db.prepare(`UPDATE test_steps SET ${fields} WHERE id = ? AND release_id = ?`);
-      stmt.run(...values, id, releaseId);
+      await db.run(`UPDATE test_steps SET ${fields} WHERE id = ? AND release_id = ?`, [
+        ...values,
+        id,
+        releaseId,
+      ]);
 
       // Build old and new value objects for changed fields
       const oldValue: Record<string, unknown> = {};
@@ -129,60 +135,68 @@ router.patch(
 );
 
 // DELETE /api/test-steps/:releaseId/:id - Delete a step
-router.delete('/:releaseId/:id', (req: Request<StepIdParams>, res: Response): void => {
-  const { releaseId, id } = req.params;
+router.delete(
+  '/:releaseId/:id',
+  async (req: Request<StepIdParams>, res: Response): Promise<void> => {
+    const { releaseId, id } = req.params;
 
-  try {
-    const db = getDb();
+    try {
+      const db = getDb();
 
-    // Get the step to find its scenario and order
-    interface StepInfo {
-      test_scenario_id: number;
-      order_index: number;
+      // Get the step to find its scenario and order
+      interface StepInfo {
+        test_scenario_id: number;
+        order_index: number;
+      }
+      const step = await db.get<StepInfo>(
+        'SELECT test_scenario_id, order_index FROM test_steps WHERE id = ? AND release_id = ?',
+        [id, releaseId]
+      );
+      if (!step) {
+        res.status(404).json({ success: false, error: 'Step not found' });
+        return;
+      }
+
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
+        // Delete the step
+        await db.run('DELETE FROM test_steps WHERE id = ? AND release_id = ?', [id, releaseId]);
+
+        // Reorder remaining steps
+        await db.run(
+          `UPDATE test_steps
+         SET order_index = order_index - 1
+         WHERE test_scenario_id = ? AND order_index > ? AND release_id = ?`,
+          [step.test_scenario_id, step.order_index, releaseId]
+        );
+
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
+
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'test_step',
+        resourceId: parseInt(id),
+        releaseId: releaseId,
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
     }
-    const step = db
-      .prepare(
-        'SELECT test_scenario_id, order_index FROM test_steps WHERE id = ? AND release_id = ?'
-      )
-      .get(id, releaseId) as StepInfo | undefined;
-    if (!step) {
-      res.status(404).json({ success: false, error: 'Step not found' });
-      return;
-    }
-
-    db.transaction(() => {
-      // Delete the step
-      db.prepare('DELETE FROM test_steps WHERE id = ? AND release_id = ?').run(id, releaseId);
-
-      // Reorder remaining steps
-      db.prepare(
-        `
-        UPDATE test_steps
-        SET order_index = order_index - 1
-        WHERE test_scenario_id = ? AND order_index > ? AND release_id = ?
-      `
-      ).run(step.test_scenario_id, step.order_index, releaseId);
-    })();
-
-    logAudit({
-      req,
-      action: 'DELETE',
-      resourceType: 'test_step',
-      resourceId: parseInt(id),
-      releaseId: releaseId,
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
   }
-});
+);
 
 // POST /api/test-steps/:releaseId/sync - Full sync steps (reorders, bulk additions)
 router.post(
   '/:releaseId/sync',
-  (req: Request<ReleaseIdParams, unknown, SyncStepsBody>, res: Response): void => {
+  async (req: Request<ReleaseIdParams, unknown, SyncStepsBody>, res: Response): Promise<void> => {
     const { scenarioId, steps } = req.body;
     const releaseId = req.params.releaseId;
 
@@ -193,35 +207,45 @@ router.post(
 
     try {
       const db = getDb();
-      db.transaction(() => {
-        db.prepare('DELETE FROM test_steps WHERE test_scenario_id = ? AND release_id = ?').run(
+
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
+        await db.run('DELETE FROM test_steps WHERE test_scenario_id = ? AND release_id = ?', [
           scenarioId,
-          releaseId
-        );
-        const insert = db.prepare(`
-        INSERT INTO test_steps (
-          release_id, test_scenario_id, order_index, step_definition, type,
-          element_id, action, action_result, required, expected_results,
-          select_config_id, match_config_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-        steps.forEach((s: StepData, i: number) => {
-          insert.run(
-            releaseId,
-            scenarioId,
-            i,
-            s.step_definition || '',
-            s.type || '',
-            s.element_id || '',
-            s.action || '',
-            s.action_result || '',
-            s.required ? 1 : 0,
-            s.expected_results || '',
-            s.select_config_id || null,
-            s.match_config_id || null
+          releaseId,
+        ]);
+
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          await db.run(
+            `INSERT INTO test_steps (
+              release_id, test_scenario_id, order_index, step_definition, type,
+              element_id, action, action_result, required, expected_results,
+              select_config_id, match_config_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              releaseId,
+              scenarioId,
+              i,
+              s.step_definition || '',
+              s.type || '',
+              s.element_id || '',
+              s.action || '',
+              s.action_result || '',
+              s.required ? 1 : 0,
+              s.expected_results || '',
+              s.select_config_id || null,
+              s.match_config_id || null,
+            ]
           );
-        });
-      })();
+        }
+
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       logAudit({
         req,

@@ -1,10 +1,22 @@
 FROM node:22-slim
 
-# Install build tools for better-sqlite3
+# Install Playwright dependencies for Chromium (no build tools needed - using pure JS @libsql/client)
 RUN apt-get update && apt-get install -y \
-  python3 \
-  make \
-  g++ \
+  libnss3 \
+  libnspr4 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libcups2 \
+  libdrm2 \
+  libxkbcommon0 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxfixes3 \
+  libxrandr2 \
+  libgbm1 \
+  libasound2 \
+  libpango-1.0-0 \
+  libcairo2 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,6 +26,9 @@ COPY package*.json ./
 
 # Install dependencies including devDeps for Tailwind
 RUN npm install
+
+# Install Playwright browsers (chromium only to save space)
+RUN npx playwright install chromium
 
 # Copy everything else
 COPY . .

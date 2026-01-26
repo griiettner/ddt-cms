@@ -1,8 +1,8 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { getDb } from '../db/database.js';
+import type { DatabaseWrapper } from '../db/database.js';
 import type {
-  DatabaseInstance,
   ReleaseRow,
   TestSetRow,
   TestCaseRow,
@@ -77,79 +77,86 @@ interface ExportData {
  */
 router.get(
   '/:releaseId',
-  (
+  async (
     req: Request<ExportParams>,
     res: Response<ApiSuccessResponse<ExportData> | ApiErrorResponse>
-  ): void => {
+  ): Promise<void> => {
     try {
-      const db: DatabaseInstance = getDb();
+      const db: DatabaseWrapper = getDb();
       const releaseId = req.params.releaseId;
 
       // Get release info
-      const release = db.prepare('SELECT * FROM releases WHERE id = ?').get(releaseId) as
-        | ReleaseRow
-        | undefined;
+      const release = await db.get<ReleaseRow>('SELECT * FROM releases WHERE id = ?', [releaseId]);
       if (!release) {
         res.status(404).json({ success: false, error: 'Release not found' });
         return;
       }
 
       // Get test sets for this release
-      const testSets = db
-        .prepare('SELECT * FROM test_sets WHERE release_id = ?')
-        .all(releaseId) as TestSetRow[];
+      const testSets = await db.all<TestSetRow>('SELECT * FROM test_sets WHERE release_id = ?', [
+        releaseId,
+      ]);
 
       // Build nested structure
+      const exportedTestSets: ExportedTestSet[] = [];
+
+      for (const ts of testSets) {
+        const cases = await db.all<TestCaseRow>(
+          'SELECT * FROM test_cases WHERE test_set_id = ? AND release_id = ? ORDER BY order_index ASC',
+          [ts.id, releaseId]
+        );
+
+        const exportedCases: ExportedTestCase[] = [];
+
+        for (const tc of cases) {
+          const scenarios = await db.all<TestScenarioRow>(
+            'SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC',
+            [tc.id, releaseId]
+          );
+
+          const exportedScenarios: ExportedScenario[] = [];
+
+          for (const sc of scenarios) {
+            const steps = await db.all<TestStepRow>(
+              'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC',
+              [sc.id, releaseId]
+            );
+
+            exportedScenarios.push({
+              id: sc.id,
+              name: sc.name,
+              steps: steps.map(
+                (s: TestStepRow): ExportedStep => ({
+                  description: s.step_definition,
+                  type: s.type,
+                  element: s.element_id,
+                  action: s.action,
+                  result: s.action_result,
+                  required: Boolean(s.required),
+                  expected: s.expected_results,
+                })
+              ),
+            });
+          }
+
+          exportedCases.push({
+            id: tc.id,
+            name: tc.name,
+            scenarios: exportedScenarios,
+          });
+        }
+
+        exportedTestSets.push({
+          id: ts.id,
+          name: ts.name,
+          test_cases: exportedCases,
+        });
+      }
+
       const exportData: ExportData = {
         release: release.release_number,
         generated_at: new Date().toISOString(),
-        test_sets: testSets.map((ts: TestSetRow): ExportedTestSet => {
-          const cases = db
-            .prepare(
-              'SELECT * FROM test_cases WHERE test_set_id = ? AND release_id = ? ORDER BY order_index ASC'
-            )
-            .all(ts.id, releaseId) as TestCaseRow[];
-
-          return {
-            id: ts.id,
-            name: ts.name,
-            test_cases: cases.map((tc: TestCaseRow): ExportedTestCase => {
-              // Get scenarios (custom logic: usually 1, but we'll map all)
-              const scenarios = db
-                .prepare(
-                  'SELECT * FROM test_scenarios WHERE test_case_id = ? AND release_id = ? ORDER BY order_index ASC'
-                )
-                .all(tc.id, releaseId) as TestScenarioRow[];
-
-              return {
-                id: tc.id,
-                name: tc.name,
-                scenarios: scenarios.map((sc: TestScenarioRow): ExportedScenario => {
-                  const steps = db
-                    .prepare(
-                      'SELECT * FROM test_steps WHERE test_scenario_id = ? AND release_id = ? ORDER BY order_index ASC'
-                    )
-                    .all(sc.id, releaseId) as TestStepRow[];
-                  return {
-                    id: sc.id,
-                    name: sc.name,
-                    steps: steps.map(
-                      (s: TestStepRow): ExportedStep => ({
-                        description: s.step_definition,
-                        type: s.type,
-                        element: s.element_id,
-                        action: s.action,
-                        result: s.action_result,
-                        required: Boolean(s.required),
-                        expected: s.expected_results,
-                      })
-                    ),
-                  };
-                }),
-              };
-            }),
-          };
-        }),
+        test_sets: exportedTestSets,
       };
 
       logAudit({

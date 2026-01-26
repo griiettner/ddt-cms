@@ -1,12 +1,13 @@
 import { getDb } from './database.js';
-import type { DatabaseInstance, TypeConfig, ActionConfig } from '../types/index.js';
+import type { DatabaseWrapper } from './database.js';
+import type { TypeConfig, ActionConfig } from '../types/index.js';
 
 /**
  * Seeds the database with default configuration options
  * This seeds global defaults (release_id = NULL) that can be overridden per-release
  */
-export const seedConfiguration = (): void => {
-  const db: DatabaseInstance = getDb();
+export const seedConfiguration = async (): Promise<void> => {
+  const db: DatabaseWrapper = getDb();
 
   const types: TypeConfig[] = [
     { key: 'button-click', name: 'button-click' },
@@ -41,16 +42,21 @@ export const seedConfiguration = (): void => {
   ];
 
   // Insert global defaults (release_id = NULL)
-  const insertConfig = db.prepare(`
+  const insertSql = `
     INSERT OR IGNORE INTO configuration_options
     (release_id, category, key, display_name, result_type, order_index)
     VALUES (NULL, ?, ?, ?, ?, ?)
-  `);
+  `;
 
-  const transaction = db.transaction((): void => {
-    types.forEach((t, i) => insertConfig.run('type', t.key, t.name, null, i));
-    actions.forEach((a, i) => insertConfig.run('action', a.key, a.name, a.result_type, i));
-  });
+  // Insert types
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    await db.run(insertSql, ['type', t.key, t.name, null, i]);
+  }
 
-  transaction();
+  // Insert actions
+  for (let i = 0; i < actions.length; i++) {
+    const a = actions[i];
+    await db.run(insertSql, ['action', a.key, a.name, a.result_type, i]);
+  }
 };

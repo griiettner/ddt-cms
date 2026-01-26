@@ -19,12 +19,12 @@ interface DashboardParams {
  */
 router.get(
   '/:releaseId?',
-  (
+  async (
     req: Request<DashboardParams>,
     res: Response<ApiSuccessResponse<DashboardStats> | ApiErrorResponse>
-  ): void => {
+  ): Promise<void> => {
     try {
-      const stats = getDashboardStats(req.params.releaseId);
+      const stats = await getDashboardStats(req.params.releaseId);
       res.json({ success: true, data: stats });
     } catch (err) {
       const error = err as Error;

@@ -45,21 +45,58 @@ interface UpdateTestSetBody {
   category_id?: number | null;
 }
 
+// Extended category info with display path
+interface CategoryWithDisplayPath extends CategoryRow {
+  displayPath: string;
+}
+
 // Response types
 interface TestSetWithDetails extends TestSetRow {
   caseCount: number;
   scenarioCount: number;
-  category: CategoryRow | null;
+  category: CategoryWithDisplayPath | null;
 }
 
-// Helper to get category info
-function getCategoryInfo(categoryId: number | null | undefined): CategoryRow | null {
+// Helper to get category info with full display path
+async function getCategoryInfo(
+  categoryId: number | null | undefined
+): Promise<CategoryWithDisplayPath | null> {
   if (!categoryId) return null;
   try {
     const db = getDb();
-    return db
-      .prepare('SELECT id, name, path, level FROM categories WHERE id = ?')
-      .get(categoryId) as CategoryRow | null;
+    const category = await db.get<CategoryRow>(
+      'SELECT id, name, path, level FROM categories WHERE id = ?',
+      [categoryId]
+    );
+
+    if (!category) return null;
+
+    // Build the display path from ancestor IDs
+    let displayPath = category.name;
+
+    if (category.path) {
+      // path contains ancestor IDs like "1/2/3"
+      const ancestorIds = category.path.split('/').filter((id) => id);
+      if (ancestorIds.length > 0) {
+        const placeholders = ancestorIds.map(() => '?').join(',');
+        const ancestors = await db.all<{ id: number; name: string }>(
+          `SELECT id, name FROM categories WHERE id IN (${placeholders})`,
+          ancestorIds.map((id) => parseInt(id))
+        );
+
+        // Create a map for quick lookup
+        const ancestorMap = new Map(ancestors.map((a) => [a.id, a.name]));
+
+        // Build path in order
+        const pathNames = ancestorIds
+          .map((id) => ancestorMap.get(parseInt(id)) || '')
+          .filter((name) => name);
+        pathNames.push(category.name);
+        displayPath = pathNames.join(' / ');
+      }
+    }
+
+    return { ...category, displayPath };
   } catch {
     return null;
   }
@@ -68,7 +105,10 @@ function getCategoryInfo(categoryId: number | null | undefined): CategoryRow | n
 // GET /api/test-sets/:releaseId - List all test sets for a release with pagination and filters
 router.get(
   '/:releaseId',
-  (req: Request<ReleaseIdParams, unknown, unknown, TestSetsListQuery>, res: Response): void => {
+  async (
+    req: Request<ReleaseIdParams, unknown, unknown, TestSetsListQuery>,
+    res: Response
+  ): Promise<void> => {
     const { page = '1', limit = '10', search = '', category_id, category_ids } = req.query;
     const pageNum: number = parseInt(page as string);
     const limitNum: number = parseInt(limit as string);
@@ -109,32 +149,33 @@ router.get(
 
       query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
 
-      const totalResult = db.prepare(countQuery).get(...params) as TotalResult | undefined;
+      const totalResult = await db.get<TotalResult>(countQuery, params);
       const total: number = totalResult ? totalResult.total : 0;
-      const testSets = db.prepare(query).all(...params, limitNum, offset) as TestSetRow[];
+      const testSets = await db.all<TestSetRow>(query, [...params, limitNum, offset]);
 
       // Fetch counts for each test set and category info
-      const data: TestSetWithDetails[] = testSets.map((ts: TestSetRow): TestSetWithDetails => {
-        const caseCount = (
-          db
-            .prepare('SELECT COUNT(*) as count FROM test_cases WHERE test_set_id = ?')
-            .get(ts.id) as CountResult
-        ).count;
-        const scenarioCount = (
-          db
-            .prepare(
-              'SELECT COUNT(*) as count FROM test_scenarios ts JOIN test_cases tc ON ts.test_case_id = tc.id WHERE tc.test_set_id = ?'
-            )
-            .get(ts.id) as CountResult
-        ).count;
-        const category = getCategoryInfo(ts.category_id);
-        return {
+      const data: TestSetWithDetails[] = [];
+      for (const ts of testSets) {
+        const caseCountResult = await db.get<CountResult>(
+          'SELECT COUNT(*) as count FROM test_cases WHERE test_set_id = ?',
+          [ts.id]
+        );
+        const caseCount = caseCountResult?.count ?? 0;
+
+        const scenarioCountResult = await db.get<CountResult>(
+          'SELECT COUNT(*) as count FROM test_scenarios ts JOIN test_cases tc ON ts.test_case_id = tc.id WHERE tc.test_set_id = ?',
+          [ts.id]
+        );
+        const scenarioCount = scenarioCountResult?.count ?? 0;
+
+        const category = await getCategoryInfo(ts.category_id);
+        data.push({
           ...ts,
           caseCount,
           scenarioCount,
           category,
-        };
-      });
+        });
+      }
 
       res.json({
         success: true,
@@ -151,11 +192,14 @@ router.get(
 // POST /api/test-sets/:releaseId - Create a new test set
 router.post(
   '/:releaseId',
-  (req: Request<ReleaseIdParams, unknown, CreateTestSetBody>, res: Response): void => {
+  async (
+    req: Request<ReleaseIdParams, unknown, CreateTestSetBody>,
+    res: Response
+  ): Promise<void> => {
     const { name, description, category_id } = req.body;
     const { releaseId } = req.params;
     const authReq = req as AuthenticatedRequest;
-    const user: string = authReq.user.eid;
+    const user: string = authReq.user?.eid || 'anonymous';
 
     if (!name) {
       res.status(400).json({ success: false, error: 'Test set name is required' });
@@ -164,23 +208,23 @@ router.post(
 
     try {
       const db = getDb();
-      const stmt = db.prepare(
-        'INSERT INTO test_sets (release_id, name, description, category_id, created_by) VALUES (?, ?, ?, ?, ?)'
+      const result = await db.run(
+        'INSERT INTO test_sets (release_id, name, description, category_id, created_by) VALUES (?, ?, ?, ?, ?)',
+        [releaseId, name, description || '', category_id || null, user]
       );
-      const result = stmt.run(releaseId, name, description || '', category_id || null, user);
 
-      const category = getCategoryInfo(category_id);
+      const category = await getCategoryInfo(category_id);
 
       logAudit({
         req,
         action: 'CREATE',
         resourceType: 'test_set',
-        resourceId: result.lastInsertRowid as number,
+        resourceId: Number(result.lastInsertRowid),
         resourceName: name,
         releaseId: releaseId,
       });
 
-      res.json({ success: true, data: { id: result.lastInsertRowid, name, category } });
+      res.json({ success: true, data: { id: Number(result.lastInsertRowid), name, category } });
     } catch (err) {
       const error = err as Error;
       res.status(500).json({ success: false, error: error.message });
@@ -189,37 +233,45 @@ router.post(
 );
 
 // GET /api/test-sets/:releaseId/:id - Get test set details
-router.get('/:releaseId/:id', (req: Request<TestSetIdParams>, res: Response): void => {
-  try {
-    const db = getDb();
-    const testSet = db
-      .prepare('SELECT * FROM test_sets WHERE id = ? AND release_id = ?')
-      .get(req.params.id, req.params.releaseId) as TestSetRow | undefined;
-    if (!testSet) {
-      res.status(404).json({ success: false, error: 'Test set not found' });
-      return;
-    }
+router.get(
+  '/:releaseId/:id',
+  async (req: Request<TestSetIdParams>, res: Response): Promise<void> => {
+    try {
+      const db = getDb();
+      const testSet = await db.get<TestSetRow>(
+        'SELECT * FROM test_sets WHERE id = ? AND release_id = ?',
+        [req.params.id, req.params.releaseId]
+      );
+      if (!testSet) {
+        res.status(404).json({ success: false, error: 'Test set not found' });
+        return;
+      }
 
-    const category = getCategoryInfo(testSet.category_id);
-    res.json({ success: true, data: { ...testSet, category } });
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
+      const category = await getCategoryInfo(testSet.category_id);
+      res.json({ success: true, data: { ...testSet, category } });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 // PATCH /api/test-sets/:releaseId/:id - Update test set
 router.patch(
   '/:releaseId/:id',
-  (req: Request<TestSetIdParams, unknown, UpdateTestSetBody>, res: Response): void => {
+  async (
+    req: Request<TestSetIdParams, unknown, UpdateTestSetBody>,
+    res: Response
+  ): Promise<void> => {
     const { name, description, category_id } = req.body;
     try {
       const db = getDb();
 
       // Fetch the old test set data for audit logging
-      const oldTestSet = db
-        .prepare('SELECT * FROM test_sets WHERE id = ? AND release_id = ?')
-        .get(req.params.id, req.params.releaseId) as TestSetRow | undefined;
+      const oldTestSet = await db.get<TestSetRow>(
+        'SELECT * FROM test_sets WHERE id = ? AND release_id = ?',
+        [req.params.id, req.params.releaseId]
+      );
 
       if (!oldTestSet) {
         res.status(404).json({ success: false, error: 'Test set not found' });
@@ -249,15 +301,15 @@ router.patch(
       }
 
       params.push(req.params.id, req.params.releaseId);
-      const stmt = db.prepare(
-        `UPDATE test_sets SET ${updates.join(', ')} WHERE id = ? AND release_id = ?`
+      await db.run(
+        `UPDATE test_sets SET ${updates.join(', ')} WHERE id = ? AND release_id = ?`,
+        params
       );
-      stmt.run(...params);
 
-      const updated = db.prepare('SELECT * FROM test_sets WHERE id = ?').get(req.params.id) as
-        | TestSetRow
-        | undefined;
-      const category = getCategoryInfo(updated?.category_id);
+      const updated = await db.get<TestSetRow>('SELECT * FROM test_sets WHERE id = ?', [
+        req.params.id,
+      ]);
+      const category = await getCategoryInfo(updated?.category_id);
 
       // Build old and new value objects for changed fields
       const oldValue: Record<string, unknown> = {};
@@ -295,34 +347,38 @@ router.patch(
 );
 
 // DELETE /api/test-sets/:releaseId/:id - Delete test set
-router.delete('/:releaseId/:id', (req: Request<TestSetIdParams>, res: Response): void => {
-  try {
-    const db = getDb();
+router.delete(
+  '/:releaseId/:id',
+  async (req: Request<TestSetIdParams>, res: Response): Promise<void> => {
+    try {
+      const db = getDb();
 
-    // Get test set name before deleting for audit log
-    const testSet = db
-      .prepare('SELECT name FROM test_sets WHERE id = ? AND release_id = ?')
-      .get(req.params.id, req.params.releaseId) as { name: string } | undefined;
+      // Get test set name before deleting for audit log
+      const testSet = await db.get<{ name: string }>(
+        'SELECT name FROM test_sets WHERE id = ? AND release_id = ?',
+        [req.params.id, req.params.releaseId]
+      );
 
-    db.prepare('DELETE FROM test_sets WHERE id = ? AND release_id = ?').run(
-      req.params.id,
-      req.params.releaseId
-    );
+      await db.run('DELETE FROM test_sets WHERE id = ? AND release_id = ?', [
+        req.params.id,
+        req.params.releaseId,
+      ]);
 
-    logAudit({
-      req,
-      action: 'DELETE',
-      resourceType: 'test_set',
-      resourceId: parseInt(req.params.id),
-      resourceName: testSet?.name,
-      releaseId: req.params.releaseId,
-    });
+      logAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'test_set',
+        resourceId: parseInt(req.params.id),
+        resourceName: testSet?.name,
+        releaseId: req.params.releaseId,
+      });
 
-    res.json({ success: true });
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true });
+    } catch (err) {
+      const error = err as Error;
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 export default router;

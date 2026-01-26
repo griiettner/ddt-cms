@@ -39,21 +39,23 @@ interface BulkOptionsBody {
 // GET /api/config/:releaseId/types - List type options
 router.get(
   '/:releaseId/types',
-  (req: Request<ReleaseIdParams>, res: Response<ApiResponse<ConfigOptionRow[]>>): void => {
+  async (
+    req: Request<ReleaseIdParams>,
+    res: Response<ApiResponse<ConfigOptionRow[]>>
+  ): Promise<void> => {
     try {
       const db = getDb();
       const releaseId = req.params.releaseId;
       // Get release-specific config, falling back to global (NULL release_id) config
-      const types = db
-        .prepare(
-          `SELECT * FROM configuration_options
-           WHERE category = 'type' AND is_active = 1
-           AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
-             SELECT key FROM configuration_options WHERE category = 'type' AND release_id = ?
-           )))
-           ORDER BY order_index ASC`
-        )
-        .all(releaseId, releaseId) as ConfigOptionRow[];
+      const types = await db.all<ConfigOptionRow>(
+        `SELECT * FROM configuration_options
+         WHERE category = 'type' AND is_active = 1
+         AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
+           SELECT key FROM configuration_options WHERE category = 'type' AND release_id = ?
+         )))
+         ORDER BY order_index ASC`,
+        [releaseId, releaseId]
+      );
       res.json({ success: true, data: types });
     } catch (err) {
       const error = err as Error;
@@ -65,21 +67,23 @@ router.get(
 // GET /api/config/:releaseId/actions - List action options
 router.get(
   '/:releaseId/actions',
-  (req: Request<ReleaseIdParams>, res: Response<ApiResponse<ConfigOptionRow[]>>): void => {
+  async (
+    req: Request<ReleaseIdParams>,
+    res: Response<ApiResponse<ConfigOptionRow[]>>
+  ): Promise<void> => {
     try {
       const db = getDb();
       const releaseId = req.params.releaseId;
       // Get release-specific config, falling back to global (NULL release_id) config
-      const actions = db
-        .prepare(
-          `SELECT * FROM configuration_options
-           WHERE category = 'action' AND is_active = 1
-           AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
-             SELECT key FROM configuration_options WHERE category = 'action' AND release_id = ?
-           )))
-           ORDER BY order_index ASC`
-        )
-        .all(releaseId, releaseId) as ConfigOptionRow[];
+      const actions = await db.all<ConfigOptionRow>(
+        `SELECT * FROM configuration_options
+         WHERE category = 'action' AND is_active = 1
+         AND (release_id = ? OR (release_id IS NULL AND key NOT IN (
+           SELECT key FROM configuration_options WHERE category = 'action' AND release_id = ?
+         )))
+         ORDER BY order_index ASC`,
+        [releaseId, releaseId]
+      );
       res.json({ success: true, data: actions });
     } catch (err) {
       const error = err as Error;
@@ -107,28 +111,28 @@ interface EnvironmentParams {
 // GET /api/config/:releaseId/environments - List environment URLs
 router.get(
   '/:releaseId/environments',
-  (req: Request<ReleaseIdParams>, res: Response<ApiResponse<EnvironmentConfigRow[]>>): void => {
+  async (
+    req: Request<ReleaseIdParams>,
+    res: Response<ApiResponse<EnvironmentConfigRow[]>>
+  ): Promise<void> => {
     try {
       const db = getDb();
       const { releaseId } = req.params;
 
       // Get environments for this release, falling back to global (NULL release_id)
-      const environments = db
-        .prepare(
-          `
-          SELECT * FROM environment_configs
-          WHERE release_id = ? OR release_id IS NULL
-          ORDER BY
-            CASE
-              WHEN environment = 'dev' THEN 1
-              WHEN environment = 'qa' THEN 2
-              WHEN environment = 'uat' THEN 3
-              ELSE 4
-            END,
-            environment ASC
-        `
-        )
-        .all(releaseId) as EnvironmentConfigRow[];
+      const environments = await db.all<EnvironmentConfigRow>(
+        `SELECT * FROM environment_configs
+         WHERE release_id = ? OR release_id IS NULL
+         ORDER BY
+           CASE
+             WHEN environment = 'dev' THEN 1
+             WHEN environment = 'qa' THEN 2
+             WHEN environment = 'uat' THEN 3
+             ELSE 4
+           END,
+           environment ASC`,
+        [releaseId]
+      );
 
       // Filter to prefer release-specific over global
       const envMap = new Map<string, EnvironmentConfigRow>();
@@ -151,10 +155,10 @@ router.get(
 // POST /api/config/:releaseId/environments - Create or update environment
 router.post(
   '/:releaseId/environments',
-  (
+  async (
     req: Request<ReleaseIdParams, unknown, EnvironmentBody>,
     res: Response<ApiResponse<EnvironmentConfigRow>>
-  ): void => {
+  ): Promise<void> => {
     const { environment, url } = req.body;
     const { releaseId } = req.params;
 
@@ -166,33 +170,33 @@ router.post(
     try {
       const db = getDb();
 
-      // Use upsert pattern - insert or replace on conflict
-      const stmt = db.prepare(`
-        INSERT INTO environment_configs (release_id, environment, value, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(release_id, environment) DO UPDATE SET
-          value = excluded.value,
-          updated_at = CURRENT_TIMESTAMP
-      `);
-
       // releaseId of 0 or 'global' means global config
       const effectiveReleaseId = releaseId === '0' || releaseId === 'global' ? null : releaseId;
-      stmt.run(effectiveReleaseId, environment.toLowerCase(), url);
+
+      // Use upsert pattern - insert or replace on conflict
+      await db.run(
+        `INSERT INTO environment_configs (release_id, environment, value, updated_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(release_id, environment) DO UPDATE SET
+           value = excluded.value,
+           updated_at = CURRENT_TIMESTAMP`,
+        [effectiveReleaseId, environment.toLowerCase(), url]
+      );
 
       // Fetch the updated/created record
-      const created = db
-        .prepare(
-          `
-          SELECT * FROM environment_configs
-          WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
-            AND environment = ?
-        `
-        )
-        .get(
-          effectiveReleaseId,
-          effectiveReleaseId,
-          environment.toLowerCase()
-        ) as EnvironmentConfigRow;
+      const created = await db.get<EnvironmentConfigRow>(
+        `SELECT * FROM environment_configs
+         WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
+           AND environment = ?`,
+        [effectiveReleaseId, effectiveReleaseId, environment.toLowerCase()]
+      );
+
+      if (!created) {
+        res
+          .status(500)
+          .json({ success: false, error: 'Failed to create/update environment config' });
+        return;
+      }
 
       logAudit({
         req,
@@ -214,7 +218,7 @@ router.post(
 // DELETE /api/config/:releaseId/environments/:environment - Delete environment
 router.delete(
   '/:releaseId/environments/:environment',
-  (req: Request<EnvironmentParams>, res: Response<ApiResponse<undefined>>): void => {
+  async (req: Request<EnvironmentParams>, res: Response<ApiResponse<undefined>>): Promise<void> => {
     const { releaseId, environment } = req.params;
 
     try {
@@ -222,13 +226,12 @@ router.delete(
 
       const effectiveReleaseId = releaseId === '0' || releaseId === 'global' ? null : releaseId;
 
-      db.prepare(
-        `
-        DELETE FROM environment_configs
-        WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
-          AND environment = ?
-      `
-      ).run(effectiveReleaseId, effectiveReleaseId, environment.toLowerCase());
+      await db.run(
+        `DELETE FROM environment_configs
+         WHERE (release_id = ? OR (? IS NULL AND release_id IS NULL))
+           AND environment = ?`,
+        [effectiveReleaseId, effectiveReleaseId, environment.toLowerCase()]
+      );
 
       logAudit({
         req,
@@ -253,10 +256,10 @@ router.delete(
 // POST /api/config/:releaseId/:category - Add new option
 router.post(
   '/:releaseId/:category',
-  (
+  async (
     req: Request<CategoryParams, unknown, CreateOptionBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { key, display_name, result_type, default_value } = req.body;
     const { category, releaseId } = req.params;
 
@@ -269,26 +272,24 @@ router.post(
       const db = getDb();
 
       // Get max order index for this release's options
-      const maxOrder = db
-        .prepare(
-          'SELECT MAX(order_index) as max_order FROM configuration_options WHERE category = ? AND release_id = ?'
-        )
-        .get(category, releaseId) as MaxOrderResult;
-      const orderIndex = (maxOrder.max_order || 0) + 1;
+      const maxOrder = await db.get<MaxOrderResult>(
+        'SELECT MAX(order_index) as max_order FROM configuration_options WHERE category = ? AND release_id = ?',
+        [category, releaseId]
+      );
+      const orderIndex = (maxOrder?.max_order || 0) + 1;
 
-      const stmt = db.prepare(`
-        INSERT INTO configuration_options (release_id, category, key, display_name, result_type, default_value, order_index)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        releaseId,
-        category,
-        key,
-        display_name,
-        result_type || null,
-        default_value || null,
-        orderIndex
+      await db.run(
+        `INSERT INTO configuration_options (release_id, category, key, display_name, result_type, default_value, order_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          releaseId,
+          category,
+          key,
+          display_name,
+          result_type ?? null,
+          default_value ?? null,
+          orderIndex,
+        ]
       );
 
       logAudit({
@@ -310,33 +311,41 @@ router.post(
 // POST /api/config/:releaseId/:category/bulk - Replace all options for a category
 router.post(
   '/:releaseId/:category/bulk',
-  (
+  async (
     req: Request<CategoryParams, unknown, BulkOptionsBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { category, releaseId } = req.params;
     const { options } = req.body;
 
     try {
       const db = getDb();
 
-      db.transaction(() => {
+      // Start transaction
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
         // Remove existing options for this release and category
-        db.prepare('DELETE FROM configuration_options WHERE category = ? AND release_id = ?').run(
+        await db.run('DELETE FROM configuration_options WHERE category = ? AND release_id = ?', [
           category,
-          releaseId
-        );
+          releaseId,
+        ]);
 
         // Insert new ones
-        const stmt = db.prepare(`
-          INSERT INTO configuration_options (release_id, category, key, display_name, order_index)
-          VALUES (?, ?, ?, ?, ?)
-        `);
+        for (let i = 0; i < options.length; i++) {
+          const opt = options[i];
+          await db.run(
+            `INSERT INTO configuration_options (release_id, category, key, display_name, order_index)
+             VALUES (?, ?, ?, ?, ?)`,
+            [releaseId, category, opt.display_name, opt.display_name, i]
+          );
+        }
 
-        options.forEach((opt, i) => {
-          stmt.run(releaseId, category, opt.display_name, opt.display_name, i);
-        });
-      })();
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       logAudit({
         req,
@@ -361,10 +370,10 @@ interface ReorderBody {
 
 router.put(
   '/:releaseId/:category/reorder',
-  (
+  async (
     req: Request<CategoryParams, unknown, ReorderBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { category, releaseId } = req.params;
     const { ids } = req.body;
 
@@ -376,14 +385,23 @@ router.put(
     try {
       const db = getDb();
 
-      db.transaction(() => {
-        const stmt = db.prepare(
-          'UPDATE configuration_options SET order_index = ? WHERE id = ? AND category = ?'
-        );
-        ids.forEach((id, index) => {
-          stmt.run(index, id, category);
-        });
-      })();
+      // Start transaction
+      await db.exec('BEGIN TRANSACTION');
+
+      try {
+        for (let index = 0; index < ids.length; index++) {
+          const id = ids[index];
+          await db.run(
+            'UPDATE configuration_options SET order_index = ? WHERE id = ? AND category = ?',
+            [index, id, category]
+          );
+        }
+
+        await db.exec('COMMIT');
+      } catch (err) {
+        await db.exec('ROLLBACK');
+        throw err;
+      }
 
       logAudit({
         req,
@@ -404,16 +422,17 @@ router.put(
 // DELETE /api/config/:releaseId/:id - Delete option
 router.delete(
   '/:releaseId/:id',
-  (req: Request<DeleteParams>, res: Response<ApiResponse<undefined>>): void => {
+  async (req: Request<DeleteParams>, res: Response<ApiResponse<undefined>>): Promise<void> => {
     try {
       const db = getDb();
 
       // Get config option info before deleting
-      const config = db
-        .prepare('SELECT display_name, category FROM configuration_options WHERE id = ?')
-        .get(req.params.id) as { display_name: string; category: string } | undefined;
+      const config = await db.get<{ display_name: string; category: string }>(
+        'SELECT display_name, category FROM configuration_options WHERE id = ?',
+        [req.params.id]
+      );
 
-      db.prepare('DELETE FROM configuration_options WHERE id = ?').run(req.params.id);
+      await db.run('DELETE FROM configuration_options WHERE id = ?', [req.params.id]);
 
       logAudit({
         req,

@@ -59,10 +59,10 @@ interface TestSetNameRow {
  */
 router.get(
   '/:testSetId',
-  (
+  async (
     req: Request<TestSetIdParams, unknown, unknown, TestGenerationQuery>,
     res: Response<ApiResponse<TestGenerationData>>
-  ): void => {
+  ): Promise<void> => {
     const { testSetId } = req.params;
     const { releaseId } = req.query;
 
@@ -71,13 +71,18 @@ router.get(
       return;
     }
 
+    // Parse IDs as integers for database queries
+    const testSetIdNum = parseInt(testSetId, 10);
+    const releaseIdNum = parseInt(releaseId, 10);
+
     try {
       const db = getDb();
 
       // Get test set name
-      const testSet = db
-        .prepare('SELECT name FROM test_sets WHERE id = ? AND release_id = ?')
-        .get(testSetId, releaseId) as TestSetNameRow | undefined;
+      const testSet = await db.get<TestSetNameRow>(
+        'SELECT name FROM test_sets WHERE id = ? AND release_id = ?',
+        [testSetIdNum, releaseIdNum]
+      );
 
       if (!testSet) {
         res.status(404).json({ success: false, error: 'Test set not found' });
@@ -85,23 +90,20 @@ router.get(
       }
 
       // Get all scenarios with their parent case info
-      const scenariosWithCases = db
-        .prepare(
-          `
-          SELECT
-            ts.id as scenario_id,
-            ts.name as scenario_name,
-            ts.order_index as scenario_order,
-            tc.id as case_id,
-            tc.name as case_name,
-            tc.order_index as case_order
-          FROM test_scenarios ts
-          JOIN test_cases tc ON ts.test_case_id = tc.id
-          WHERE tc.test_set_id = ? AND tc.release_id = ?
-          ORDER BY tc.order_index ASC, ts.order_index ASC
-        `
-        )
-        .all(testSetId, releaseId) as ScenarioWithCaseRow[];
+      const scenariosWithCases = await db.all<ScenarioWithCaseRow>(
+        `SELECT
+          ts.id as scenario_id,
+          ts.name as scenario_name,
+          ts.order_index as scenario_order,
+          tc.id as case_id,
+          tc.name as case_name,
+          tc.order_index as case_order
+        FROM test_scenarios ts
+        JOIN test_cases tc ON ts.test_case_id = tc.id
+        WHERE tc.test_set_id = ? AND tc.release_id = ?
+        ORDER BY tc.order_index ASC, ts.order_index ASC`,
+        [testSetIdNum, releaseIdNum]
+      );
 
       // Get all steps for all scenarios in this test set
       const scenarioIds = scenariosWithCases.map((s) => s.scenario_id);
@@ -109,39 +111,42 @@ router.get(
 
       if (scenarioIds.length > 0) {
         const placeholders = scenarioIds.map(() => '?').join(',');
-        allSteps = db
-          .prepare(
-            `
-            SELECT
-              id, test_scenario_id, order_index, step_definition,
-              type, element_id, action, action_result,
-              select_config_id, match_config_id, required, expected_results
-            FROM test_steps
-            WHERE test_scenario_id IN (${placeholders})
-            ORDER BY order_index ASC
-          `
-          )
-          .all(...scenarioIds) as StepRow[];
+        allSteps = await db.all<StepRow>(
+          `SELECT
+            id, test_scenario_id, order_index, step_definition,
+            type, element_id, action, action_result,
+            select_config_id, match_config_id, required, expected_results
+          FROM test_steps
+          WHERE test_scenario_id IN (${placeholders})
+          ORDER BY order_index ASC`,
+          scenarioIds
+        );
       }
 
       // Get select configs that are used in this test set
-      const selectConfigIds = [...new Set(allSteps.map((s) => s.select_config_id).filter(Boolean))];
+      const selectConfigIds = [
+        ...new Set(allSteps.map((s) => s.select_config_id).filter(Boolean)),
+      ] as number[];
       let selectConfigs: SelectConfigRow[] = [];
       if (selectConfigIds.length > 0) {
         const placeholders = selectConfigIds.map(() => '?').join(',');
-        selectConfigs = db
-          .prepare(`SELECT * FROM select_configs WHERE id IN (${placeholders})`)
-          .all(...selectConfigIds) as SelectConfigRow[];
+        selectConfigs = await db.all<SelectConfigRow>(
+          `SELECT * FROM select_configs WHERE id IN (${placeholders})`,
+          selectConfigIds
+        );
       }
 
       // Get match configs that are used in this test set
-      const matchConfigIds = [...new Set(allSteps.map((s) => s.match_config_id).filter(Boolean))];
+      const matchConfigIds = [
+        ...new Set(allSteps.map((s) => s.match_config_id).filter(Boolean)),
+      ] as number[];
       let matchConfigs: MatchConfigRow[] = [];
       if (matchConfigIds.length > 0) {
         const placeholders = matchConfigIds.map(() => '?').join(',');
-        matchConfigs = db
-          .prepare(`SELECT * FROM match_configs WHERE id IN (${placeholders})`)
-          .all(...matchConfigIds) as MatchConfigRow[];
+        matchConfigs = await db.all<MatchConfigRow>(
+          `SELECT * FROM match_configs WHERE id IN (${placeholders})`,
+          matchConfigIds
+        );
       }
 
       // Group steps by scenario
@@ -194,9 +199,9 @@ router.get(
       }
 
       const result: TestGenerationData = {
-        testSetId: parseInt(testSetId, 10),
+        testSetId: testSetIdNum,
         testSetName: testSet.name,
-        releaseId: parseInt(releaseId, 10),
+        releaseId: releaseIdNum,
         cases: Array.from(casesMap.values()),
         selectConfigs,
         matchConfigs,

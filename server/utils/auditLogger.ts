@@ -31,38 +31,48 @@ interface AuditLogParams {
 
 /**
  * Log an audit event to the database
+ * Fire-and-forget async operation - does not block the caller
  */
 export const logAudit = (params: AuditLogParams): void => {
+  // Fire and forget - execute async but don't await
+  void logAuditAsync(params);
+};
+
+/**
+ * Internal async implementation of audit logging
+ */
+async function logAuditAsync(params: AuditLogParams): Promise<void> {
   try {
     const db = getDb();
     const user = params.req.user;
 
-    db.prepare(
+    await db.run(
       `
       INSERT INTO audit_logs (
         user_eid, user_name, action, resource_type, resource_id,
         resource_name, release_id, details, ip_address, user_agent,
         old_value, new_value
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
-    ).run(
-      user?.eid || 'anonymous',
-      user?.name || null,
-      params.action,
-      params.resourceType,
-      params.resourceId !== undefined ? Number(params.resourceId) : null,
-      params.resourceName ?? null,
-      params.releaseId !== undefined ? Number(params.releaseId) : null,
-      params.details ? JSON.stringify(params.details) : null,
-      params.req.ip || params.req.socket.remoteAddress || null,
-      params.req.get('User-Agent') || null,
-      params.oldValue ? JSON.stringify(params.oldValue) : null,
-      params.newValue ? JSON.stringify(params.newValue) : null
+    `,
+      [
+        user?.eid || 'anonymous',
+        user?.name || null,
+        params.action,
+        params.resourceType,
+        params.resourceId !== undefined ? Number(params.resourceId) : null,
+        params.resourceName ?? null,
+        params.releaseId !== undefined ? Number(params.releaseId) : null,
+        params.details ? JSON.stringify(params.details) : null,
+        params.req.ip || params.req.socket.remoteAddress || null,
+        params.req.get('User-Agent') || null,
+        params.oldValue ? JSON.stringify(params.oldValue) : null,
+        params.newValue ? JSON.stringify(params.newValue) : null,
+      ]
     );
   } catch (err) {
     // Log error but don't throw - audit logging should not break the main operation
     console.error('Audit logging failed:', (err as Error).message);
   }
-};
+}
 
 export default logAudit;

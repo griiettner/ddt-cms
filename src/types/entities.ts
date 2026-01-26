@@ -32,6 +32,7 @@ export interface Category {
   created_at: string;
   updated_at: string;
   children?: Category[];
+  displayPath?: string; // Full hierarchical path like "Parent / Child / Grandchild"
 }
 
 // Flat Category for dropdowns (includes computed displayName)

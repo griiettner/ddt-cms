@@ -3,7 +3,7 @@
  */
 
 import type { Request } from 'express';
-import type Database from 'better-sqlite3';
+import type { DatabaseWrapper } from '../db/database.js';
 
 // User type for authenticated requests
 export interface User {
@@ -17,8 +17,8 @@ export interface AuthenticatedRequest extends Request {
   user: User;
 }
 
-// Database types
-export type DatabaseInstance = Database.Database;
+// Database types - now using libsql wrapper
+export type DatabaseInstance = DatabaseWrapper;
 
 // Generic database row type
 export type DbRow = Record<string, unknown>;

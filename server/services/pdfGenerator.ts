@@ -219,22 +219,22 @@ export async function generatePdfReport(testRunId: number): Promise<PdfGeneratio
     const db = getDb();
 
     // Get test run data
-    const run = db.prepare('SELECT * FROM test_runs WHERE id = ?').get(testRunId) as
-      | TestRunRow
-      | undefined;
+    const run = await db.get<TestRunRow>('SELECT * FROM test_runs WHERE id = ?', [testRunId]);
     if (!run) {
       return { success: false, error: 'Test run not found' };
     }
 
     // Get step results
-    const steps = db
-      .prepare('SELECT * FROM test_run_steps WHERE test_run_id = ? ORDER BY id ASC')
-      .all(testRunId) as TestRunStepRow[];
+    const steps = await db.all<TestRunStepRow>(
+      'SELECT * FROM test_run_steps WHERE test_run_id = ? ORDER BY id ASC',
+      [testRunId]
+    );
 
     // Get release number
-    const release = db
-      .prepare('SELECT release_number FROM releases WHERE id = ?')
-      .get(run.release_id) as { release_number: string } | undefined;
+    const release = await db.get<{ release_number: string }>(
+      'SELECT release_number FROM releases WHERE id = ?',
+      [run.release_id]
+    );
 
     // Ensure run directory exists
     const runDir = getRunDir(testRunId);
@@ -262,7 +262,7 @@ export async function generatePdfReport(testRunId: number): Promise<PdfGeneratio
     await browser.close();
 
     // Update database with PDF path
-    db.prepare('UPDATE test_runs SET pdf_path = ? WHERE id = ?').run(pdfPath, testRunId);
+    await db.run('UPDATE test_runs SET pdf_path = ? WHERE id = ?', [pdfPath, testRunId]);
 
     console.log(`[PDF] Generated report for test run ${testRunId}: ${pdfPath}`);
 
@@ -281,9 +281,10 @@ export async function getPdfPath(testRunId: number): Promise<string | null> {
   const db = getDb();
 
   // Check if PDF already exists in database
-  const run = db.prepare('SELECT pdf_path FROM test_runs WHERE id = ?').get(testRunId) as
-    | { pdf_path: string | null }
-    | undefined;
+  const run = await db.get<{ pdf_path: string | null }>(
+    'SELECT pdf_path FROM test_runs WHERE id = ?',
+    [testRunId]
+  );
 
   if (run?.pdf_path && fs.existsSync(run.pdf_path)) {
     return run.pdf_path;
@@ -295,7 +296,7 @@ export async function getPdfPath(testRunId: number): Promise<string | null> {
 
   if (fs.existsSync(pdfPath)) {
     // Update database
-    db.prepare('UPDATE test_runs SET pdf_path = ? WHERE id = ?').run(pdfPath, testRunId);
+    await db.run('UPDATE test_runs SET pdf_path = ? WHERE id = ?', [pdfPath, testRunId]);
     return pdfPath;
   }
 

@@ -18,10 +18,12 @@ declare module 'express-serve-static-core' {
 dotenv.config();
 
 import { initSchema } from './db/migrations.js';
+import { initDbPragmas } from './db/database.js';
 
-// Initialize Unified Database
+// Initialize Unified Database (async)
 try {
-  initSchema();
+  await initSchema();
+  await initDbPragmas();
 } catch (err) {
   const error = err as Error;
   console.error('Failed to initialize database:', error.message);

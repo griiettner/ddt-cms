@@ -37,10 +37,10 @@ interface FilterOptions {
 // GET /api/audit-logs - List audit logs with filters and pagination
 router.get(
   '/',
-  (
+  async (
     req: Request<object, unknown, unknown, AuditLogsListQuery>,
     res: Response<PaginatedApiResponse<AuditLogRow>>
-  ): void => {
+  ): Promise<void> => {
     const {
       page = '1',
       limit = '50',
@@ -111,11 +111,11 @@ router.get(
       query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
 
       // Get total count
-      const totalResult = db.prepare(countQuery).get(...params) as TotalResult;
+      const totalResult = await db.get<TotalResult>(countQuery, params);
       const total = totalResult?.total ?? 0;
 
       // Get paginated results
-      const logs = db.prepare(query).all(...params, limitNum, offset) as AuditLogRow[];
+      const logs = await db.all<AuditLogRow>(query, [...params, limitNum, offset]);
 
       // Parse JSON fields for each log entry
       const parsedLogs = logs.map((log) => ({
@@ -147,48 +147,51 @@ router.get(
 );
 
 // GET /api/audit-logs/filters - Get available filter options
-router.get('/filters', (_req: Request, res: Response<ApiResponse<FilterOptions>>): void => {
-  try {
-    const db = getDb();
+router.get(
+  '/filters',
+  async (_req: Request, res: Response<ApiResponse<FilterOptions>>): Promise<void> => {
+    try {
+      const db = getDb();
 
-    // Get distinct users
-    interface UserResult {
-      user_eid: string;
-      user_name: string | null;
+      // Get distinct users
+      interface UserResult {
+        user_eid: string;
+        user_name: string | null;
+      }
+      const users = await db.all<UserResult>(
+        `SELECT DISTINCT user_eid, user_name FROM audit_logs ORDER BY user_eid`
+      );
+
+      // Get distinct actions
+      interface ActionResult {
+        action: string;
+      }
+      const actions = await db.all<ActionResult>(
+        `SELECT DISTINCT action FROM audit_logs ORDER BY action`
+      );
+
+      // Get distinct resource types
+      interface ResourceTypeResult {
+        resource_type: string;
+      }
+      const resourceTypes = await db.all<ResourceTypeResult>(
+        `SELECT DISTINCT resource_type FROM audit_logs ORDER BY resource_type`
+      );
+
+      res.json({
+        success: true,
+        data: {
+          users: users.map((u) => ({ eid: u.user_eid, name: u.user_name })),
+          actions: actions.map((a) => a.action),
+          resourceTypes: resourceTypes.map((r) => r.resource_type),
+        },
+      });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error fetching audit log filters:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-    const users = db
-      .prepare(`SELECT DISTINCT user_eid, user_name FROM audit_logs ORDER BY user_eid`)
-      .all() as UserResult[];
-
-    // Get distinct actions
-    interface ActionResult {
-      action: string;
-    }
-    const actions = db
-      .prepare(`SELECT DISTINCT action FROM audit_logs ORDER BY action`)
-      .all() as ActionResult[];
-
-    // Get distinct resource types
-    interface ResourceTypeResult {
-      resource_type: string;
-    }
-    const resourceTypes = db
-      .prepare(`SELECT DISTINCT resource_type FROM audit_logs ORDER BY resource_type`)
-      .all() as ResourceTypeResult[];
-
-    res.json({
-      success: true,
-      data: {
-        users: users.map((u) => ({ eid: u.user_eid, name: u.user_name })),
-        actions: actions.map((a) => a.action),
-        resourceTypes: resourceTypes.map((r) => r.resource_type),
-      },
-    });
-  } catch (err) {
-    const error = err as Error;
-    console.error('Error fetching audit log filters:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
-});
+);
 
 export default router;

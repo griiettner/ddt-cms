@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getRegistryDb, getDb } from '../db/database.js';
+import { getDb } from '../db/database.js';
 import type { TestRunRow, TotalResult, ApiResponse, TestRunStepRow } from '../types/index.js';
 import {
   testExecutionQueue,
@@ -89,13 +89,12 @@ interface CreateTestRunResponse {
 }
 
 // GET /api/test-runs - List test runs with pagination and filters
-// Batch runs (7PS) are shown as combined entries
 router.get(
   '/',
-  (
+  async (
     req: Request<unknown, unknown, unknown, ListTestRunsQuery>,
     res: Response<TestRunsListResponse | { success: false; error: string }>
-  ): void => {
+  ): Promise<void> => {
     const {
       releaseId,
       page = '1',
@@ -113,7 +112,7 @@ router.get(
     const offset = (pageNum - 1) * limit;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Build base WHERE conditions
       const conditions: string[] = [];
@@ -147,7 +146,6 @@ router.get(
       const baseWhere = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 
       // Query for combined view: individual runs + aggregated batches
-      // Individual runs (no batch_id)
       const individualQuery = `
         SELECT
           tr.id,
@@ -177,8 +175,6 @@ router.get(
         ${testSetName ? 'AND tr.test_set_name LIKE ?' : ''}
       `;
 
-      // Batch runs (with batch_id) - aggregated
-      // Format: "Release <release_number> MM/DD/YYYY HH:MMAM/PM"
       const batchQuery = `
         SELECT
           MIN(tr.id) as id,
@@ -247,7 +243,7 @@ router.get(
         LIMIT ? OFFSET ?
       `;
 
-      // Count query - count individual + count distinct batches
+      // Count query
       const countQuery = `
         SELECT (
           SELECT COUNT(*) FROM test_runs tr
@@ -278,15 +274,14 @@ router.get(
       // Execute count query
       const countParams = [...individualParams, ...batchParams];
       if (status) countParams.push(...params, status);
-      const { total } = db.prepare(countQuery).get(...countParams) as TotalResult;
+      const totalResult = await db.get<TotalResult>(countQuery, countParams);
+      const total = totalResult?.total ?? 0;
 
       // Execute main query
       const allParams = [...individualParams, ...batchParams, limit, offset];
-      const runs = db.prepare(combinedQuery).all(...allParams) as (TestRunRow & {
-        release_number?: string;
-        batch_id?: string;
-        batch_size?: number;
-      })[];
+      const runs = await db.all<
+        TestRunRow & { release_number?: string; batch_id?: string; batch_size?: number }
+      >(combinedQuery, allParams);
 
       // Parse failed_details JSON
       const parsedRuns: TestRunWithRelease[] = runs.map((run) => ({
@@ -322,44 +317,37 @@ interface FilterOptionsResponse {
 // GET /api/test-runs/filter-options - Get unique values for filters
 router.get(
   '/filter-options',
-  (
+  async (
     req: Request<unknown, unknown, unknown, { releaseId?: string }>,
     res: Response<ApiResponse<FilterOptionsResponse>>
-  ): void => {
+  ): Promise<void> => {
     const { releaseId } = req.query;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
-      const whereClause = releaseId ? ' WHERE release_id = ?' : '';
       const params = releaseId ? [releaseId] : [];
 
       // Get distinct environments
-      const environments = db
-        .prepare(
-          `SELECT DISTINCT environment FROM test_runs${whereClause} AND environment IS NOT NULL ORDER BY environment`
-            .replace('AND', releaseId ? 'AND' : 'WHERE')
-            .replace(' WHERE AND', ' WHERE')
-        )
-        .all(...params) as { environment: string }[];
+      const envQuery = releaseId
+        ? 'SELECT DISTINCT environment FROM test_runs WHERE release_id = ? AND environment IS NOT NULL ORDER BY environment'
+        : 'SELECT DISTINCT environment FROM test_runs WHERE environment IS NOT NULL ORDER BY environment';
+      const environments = await db.all<{ environment: string }>(envQuery, params);
 
       // Get distinct executed_by values
-      const executedBy = db
-        .prepare(
-          `SELECT DISTINCT executed_by FROM test_runs${whereClause} AND executed_by IS NOT NULL ORDER BY executed_by`
-            .replace('AND', releaseId ? 'AND' : 'WHERE')
-            .replace(' WHERE AND', ' WHERE')
-        )
-        .all(...params) as { executed_by: string }[];
+      const execQuery = releaseId
+        ? 'SELECT DISTINCT executed_by FROM test_runs WHERE release_id = ? AND executed_by IS NOT NULL ORDER BY executed_by'
+        : 'SELECT DISTINCT executed_by FROM test_runs WHERE executed_by IS NOT NULL ORDER BY executed_by';
+      const executedBy = await db.all<{ executed_by: string }>(execQuery, params);
 
       // Get distinct test sets with their IDs
-      const testSets = db
-        .prepare(
-          `SELECT DISTINCT test_set_id, test_set_name FROM test_runs${whereClause} AND test_set_id IS NOT NULL ORDER BY test_set_name`
-            .replace('AND', releaseId ? 'AND' : 'WHERE')
-            .replace(' WHERE AND', ' WHERE')
-        )
-        .all(...params) as { test_set_id: number; test_set_name: string }[];
+      const testSetQuery = releaseId
+        ? 'SELECT DISTINCT test_set_id, test_set_name FROM test_runs WHERE release_id = ? AND test_set_id IS NOT NULL ORDER BY test_set_name'
+        : 'SELECT DISTINCT test_set_id, test_set_name FROM test_runs WHERE test_set_id IS NOT NULL ORDER BY test_set_name';
+      const testSets = await db.all<{ test_set_id: number; test_set_name: string }>(
+        testSetQuery,
+        params
+      );
 
       res.json({
         success: true,
@@ -379,23 +367,18 @@ router.get(
 // GET /api/test-runs/:id - Get a specific test run
 router.get(
   '/:id',
-  (req: Request<IdParams>, res: Response<ApiResponse<TestRunWithRelease>>): void => {
+  async (req: Request<IdParams>, res: Response<ApiResponse<TestRunWithRelease>>): Promise<void> => {
     const { id } = req.params;
 
     try {
-      const db = getRegistryDb();
-      const run = db
-        .prepare(
-          `
-        SELECT
-          tr.*,
-          r.release_number
-        FROM test_runs tr
-        LEFT JOIN releases r ON tr.release_id = r.id
-        WHERE tr.id = ?
-      `
-        )
-        .get(id) as (TestRunRow & { release_number?: string }) | undefined;
+      const db = getDb();
+      const run = await db.get<TestRunRow & { release_number?: string }>(
+        `SELECT tr.*, r.release_number
+         FROM test_runs tr
+         LEFT JOIN releases r ON tr.release_id = r.id
+         WHERE tr.id = ?`,
+        [id]
+      );
 
       if (!run) {
         res.status(404).json({ success: false, error: 'Test run not found' });
@@ -419,10 +402,10 @@ router.get(
 // POST /api/test-runs - Create a new test run
 router.post(
   '/',
-  (
+  async (
     req: Request<unknown, unknown, CreateTestRunBody>,
     res: Response<ApiResponse<CreateTestRunResponse>>
-  ): void => {
+  ): Promise<void> => {
     const {
       releaseId,
       testSetId,
@@ -443,40 +426,30 @@ router.post(
     }
 
     try {
-      const db = getRegistryDb();
-      const stmt = db.prepare(`
-        INSERT INTO test_runs (
-          release_id,
-          test_set_id,
-          test_set_name,
-          status,
-          executed_by,
-          duration_ms,
-          total_scenarios,
-          total_steps,
-          passed_steps,
-          failed_steps,
-          failed_details
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const result = stmt.run(
-        releaseId,
-        testSetId || null,
-        testSetName || null,
-        status || 'running',
-        executedBy || null,
-        durationMs || 0,
-        totalScenarios || 0,
-        totalSteps || 0,
-        passedSteps || 0,
-        failedSteps || 0,
-        failedDetails ? JSON.stringify(failedDetails) : null
+      const db = getDb();
+      const result = await db.run(
+        `INSERT INTO test_runs (
+          release_id, test_set_id, test_set_name, status, executed_by,
+          duration_ms, total_scenarios, total_steps, passed_steps, failed_steps, failed_details
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          releaseId,
+          testSetId || null,
+          testSetName || null,
+          status || 'running',
+          executedBy || null,
+          durationMs || 0,
+          totalScenarios || 0,
+          totalSteps || 0,
+          passedSteps || 0,
+          failedSteps || 0,
+          failedDetails ? JSON.stringify(failedDetails) : null,
+        ]
       );
 
       res.json({
         success: true,
-        data: { id: result.lastInsertRowid },
+        data: { id: Number(result.lastInsertRowid) },
       });
     } catch (err) {
       const error = err as Error;
@@ -485,18 +458,18 @@ router.post(
   }
 );
 
-// PATCH /api/test-runs/:id - Update a test run (for updating status after completion)
+// PATCH /api/test-runs/:id - Update a test run
 router.patch(
   '/:id',
-  (
+  async (
     req: Request<IdParams, unknown, UpdateTestRunBody>,
     res: Response<ApiResponse<undefined>>
-  ): void => {
+  ): Promise<void> => {
     const { id } = req.params;
     const updates = { ...req.body };
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Handle failed_details serialization
       if (updates.failedDetails !== undefined) {
@@ -525,10 +498,9 @@ router.patch(
       const fields = Object.keys(dbUpdates)
         .map((f) => `${f} = ?`)
         .join(', ');
-      const values = Object.values(dbUpdates);
+      const values = Object.values(dbUpdates) as (string | number | null)[];
 
-      const stmt = db.prepare(`UPDATE test_runs SET ${fields} WHERE id = ?`);
-      stmt.run(...values, id);
+      await db.run(`UPDATE test_runs SET ${fields} WHERE id = ?`, [...values, id]);
 
       res.json({ success: true, data: undefined });
     } catch (err) {
@@ -542,18 +514,15 @@ router.patch(
 // Playwright Execution Endpoints
 // ================================
 
-// Request body for execute
 interface ExecuteTestRunBody {
   releaseId: number;
   environment: string;
 }
 
-// Request params for execute
 interface ExecuteParams {
   testSetId: string;
 }
 
-// Response types
 interface ExecuteResponse {
   testRunId: number;
   status: 'queued' | 'running';
@@ -572,10 +541,10 @@ interface StatusResponse extends TestRunWithRelease {
 // POST /api/test-runs/execute/:testSetId - Start Playwright execution
 router.post(
   '/execute/:testSetId',
-  (
+  async (
     req: Request<ExecuteParams, unknown, ExecuteTestRunBody>,
     res: Response<ApiResponse<ExecuteResponse>>
-  ): void => {
+  ): Promise<void> => {
     const { testSetId } = req.params;
     const { releaseId, environment } = req.body;
 
@@ -584,21 +553,22 @@ router.post(
       return;
     }
 
+    // Parse IDs as integers for database queries
+    const testSetIdNum = parseInt(testSetId, 10);
+    const releaseIdNum = typeof releaseId === 'string' ? parseInt(releaseId, 10) : releaseId;
+
     try {
       const db = getDb();
 
       // Get environment URL
-      const envConfig = db
-        .prepare(
-          `
-          SELECT value FROM environment_configs
-          WHERE (release_id = ? OR release_id IS NULL)
-            AND environment = ?
-          ORDER BY release_id DESC NULLS LAST
-          LIMIT 1
-        `
-        )
-        .get(releaseId, environment.toLowerCase()) as { value: string } | undefined;
+      const envConfig = await db.get<{ value: string }>(
+        `SELECT value FROM environment_configs
+         WHERE (release_id = ? OR release_id IS NULL)
+           AND environment = ?
+         ORDER BY release_id DESC NULLS LAST
+         LIMIT 1`,
+        [releaseIdNum, environment.toLowerCase()]
+      );
 
       if (!envConfig) {
         res.status(400).json({
@@ -609,9 +579,10 @@ router.post(
       }
 
       // Get test set name
-      const testSet = db
-        .prepare('SELECT name FROM test_sets WHERE id = ? AND release_id = ?')
-        .get(testSetId, releaseId) as { name: string } | undefined;
+      const testSet = await db.get<{ name: string }>(
+        'SELECT name FROM test_sets WHERE id = ? AND release_id = ?',
+        [testSetIdNum, releaseIdNum]
+      );
 
       if (!testSet) {
         res.status(404).json({ success: false, error: 'Test set not found' });
@@ -619,35 +590,33 @@ router.post(
       }
 
       // Get release number for reports
-      const release = db
-        .prepare('SELECT release_number FROM releases WHERE id = ?')
-        .get(releaseId) as { release_number: string } | undefined;
+      const release = await db.get<{ release_number: string }>(
+        'SELECT release_number FROM releases WHERE id = ?',
+        [releaseIdNum]
+      );
 
       // Create test run record
-      const result = db
-        .prepare(
-          `
-          INSERT INTO test_runs (
-            release_id, test_set_id, test_set_name, status, environment, base_url, executed_by
-          ) VALUES (?, ?, ?, 'running', ?, ?, ?)
-        `
-        )
-        .run(
-          releaseId,
-          testSetId,
+      const result = await db.run(
+        `INSERT INTO test_runs (
+          release_id, test_set_id, test_set_name, status, environment, base_url, executed_by
+        ) VALUES (?, ?, ?, 'running', ?, ?, ?)`,
+        [
+          releaseIdNum,
+          testSetIdNum,
           testSet.name,
           environment,
           envConfig.value,
-          req.user?.eid || null
-        );
+          req.user?.eid || null,
+        ]
+      );
 
       const testRunId = Number(result.lastInsertRowid);
 
       // Add to execution queue
       testExecutionQueue.enqueue({
         testRunId,
-        testSetId: parseInt(testSetId, 10),
-        releaseId,
+        testSetId: testSetIdNum,
+        releaseId: releaseIdNum,
         releaseNumber: release?.release_number,
         baseUrl: envConfig.value,
       });
@@ -675,23 +644,18 @@ router.post(
 // GET /api/test-runs/:id/status - Get test run status with step-level results
 router.get(
   '/:id/status',
-  (req: Request<IdParams>, res: Response<ApiResponse<StatusResponse>>): void => {
+  async (req: Request<IdParams>, res: Response<ApiResponse<StatusResponse>>): Promise<void> => {
     const { id } = req.params;
 
     try {
-      const db = getRegistryDb();
-      const run = db
-        .prepare(
-          `
-          SELECT
-            tr.*,
-            r.release_number
-          FROM test_runs tr
-          LEFT JOIN releases r ON tr.release_id = r.id
-          WHERE tr.id = ?
-        `
-        )
-        .get(id) as (TestRunRow & { release_number?: string }) | undefined;
+      const db = getDb();
+      const run = await db.get<TestRunRow & { release_number?: string }>(
+        `SELECT tr.*, r.release_number
+         FROM test_runs tr
+         LEFT JOIN releases r ON tr.release_id = r.id
+         WHERE tr.id = ?`,
+        [id]
+      );
 
       if (!run) {
         res.status(404).json({ success: false, error: 'Test run not found' });
@@ -700,7 +664,7 @@ router.get(
 
       // Get step results
       const testRunId = parseInt(id, 10);
-      const steps = getTestRunSteps(testRunId);
+      const steps = await getTestRunSteps(testRunId);
 
       // Get queue status and progress
       const queueStatus = testExecutionQueue.getStatus();
@@ -749,20 +713,18 @@ router.get(
 // 7PS (7 Parallel Sets) Execution
 // ================================
 
-// Request body for bulk execute
 interface BulkExecuteBody {
   releaseId: number;
   environment: string;
 }
 
-// Response for bulk execute
 interface BulkExecuteResponse {
   batchId: string;
   testRunIds: number[];
   totalSets: number;
 }
 
-// POST /api/test-runs/execute-all - Start 7PS execution (all test sets in parallel)
+// POST /api/test-runs/execute-all - Start 7PS execution
 router.post(
   '/execute-all',
   async (
@@ -780,17 +742,14 @@ router.post(
       const db = getDb();
 
       // Get environment URL
-      const envConfig = db
-        .prepare(
-          `
-          SELECT value FROM environment_configs
-          WHERE (release_id = ? OR release_id IS NULL)
-            AND environment = ?
-          ORDER BY release_id DESC NULLS LAST
-          LIMIT 1
-        `
-        )
-        .get(releaseId, environment.toLowerCase()) as { value: string } | undefined;
+      const envConfig = await db.get<{ value: string }>(
+        `SELECT value FROM environment_configs
+         WHERE (release_id = ? OR release_id IS NULL)
+           AND environment = ?
+         ORDER BY release_id DESC NULLS LAST
+         LIMIT 1`,
+        [releaseId, environment.toLowerCase()]
+      );
 
       if (!envConfig) {
         res.status(400).json({
@@ -805,9 +764,10 @@ router.post(
         id: number;
         name: string;
       }
-      const testSets = db
-        .prepare('SELECT id, name FROM test_sets WHERE release_id = ? ORDER BY name')
-        .all(releaseId) as TestSetInfo[];
+      const testSets = await db.all<TestSetInfo>(
+        'SELECT id, name FROM test_sets WHERE release_id = ? ORDER BY name',
+        [releaseId]
+      );
 
       if (testSets.length === 0) {
         res.status(400).json({
@@ -818,15 +778,16 @@ router.post(
       }
 
       // Get release number for reports
-      const release = db
-        .prepare('SELECT release_number FROM releases WHERE id = ?')
-        .get(releaseId) as { release_number: string } | undefined;
+      const release = await db.get<{ release_number: string }>(
+        'SELECT release_number FROM releases WHERE id = ?',
+        [releaseId]
+      );
 
-      // Generate batch ID upfront so we can store it with test runs
+      // Generate batch ID
       const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       const executedBy = req.user?.eid || null;
 
-      // Create test run records for each test set with the batch_id
+      // Create test run records for each test set
       const items: {
         testRunId: number;
         testSetId: number;
@@ -836,21 +797,12 @@ router.post(
         baseUrl: string;
       }[] = [];
 
-      const insertStmt = db.prepare(`
-        INSERT INTO test_runs (
-          release_id, test_set_id, test_set_name, status, environment, base_url, executed_by, batch_id
-        ) VALUES (?, ?, ?, 'running', ?, ?, ?, ?)
-      `);
-
       for (const testSet of testSets) {
-        const result = insertStmt.run(
-          releaseId,
-          testSet.id,
-          testSet.name,
-          environment,
-          envConfig.value,
-          executedBy,
-          batchId
+        const result = await db.run(
+          `INSERT INTO test_runs (
+            release_id, test_set_id, test_set_name, status, environment, base_url, executed_by, batch_id
+          ) VALUES (?, ?, ?, 'running', ?, ?, ?, ?)`,
+          [releaseId, testSet.id, testSet.name, environment, envConfig.value, executedBy, batchId]
         );
 
         items.push({
@@ -863,11 +815,10 @@ router.post(
         });
       }
 
-      // Start parallel execution with the pre-generated batchId
+      // Start parallel execution
       const { testRunIds } = await parallelTestExecution.startBatch(items, executedBy, batchId);
       console.log(`[7PS] Batch ${batchId} started with ${testRunIds.length} test sets`);
 
-      // Return with the actual batch info
       res.json({
         success: true,
         data: {
@@ -947,14 +898,14 @@ interface BatchDetailsResponse {
 // GET /api/test-runs/batch/:batchId/details - Get full batch details from DB
 router.get(
   '/batch/:batchId/details',
-  (
+  async (
     req: Request<{ batchId: string }>,
     res: Response<ApiResponse<BatchDetailsResponse | null>>
-  ): void => {
+  ): Promise<void> => {
     const { batchId } = req.params;
 
     try {
-      const db = getRegistryDb();
+      const db = getDb();
 
       // Get all test runs for this batch
       interface BatchRunRow {
@@ -973,20 +924,17 @@ router.get(
         total_steps: number;
       }
 
-      const runs = db
-        .prepare(
-          `
-          SELECT
-            tr.id, tr.release_id, r.release_number, tr.test_set_id, tr.test_set_name,
-            tr.status, tr.environment, tr.executed_by, tr.executed_at,
-            tr.duration_ms, tr.passed_steps, tr.failed_steps, tr.total_steps
-          FROM test_runs tr
-          LEFT JOIN releases r ON tr.release_id = r.id
-          WHERE tr.batch_id = ?
-          ORDER BY tr.id
-        `
-        )
-        .all(batchId) as BatchRunRow[];
+      const runs = await db.all<BatchRunRow>(
+        `SELECT
+          tr.id, tr.release_id, r.release_number, tr.test_set_id, tr.test_set_name,
+          tr.status, tr.environment, tr.executed_by, tr.executed_at,
+          tr.duration_ms, tr.passed_steps, tr.failed_steps, tr.total_steps
+        FROM test_runs tr
+        LEFT JOIN releases r ON tr.release_id = r.id
+        WHERE tr.batch_id = ?
+        ORDER BY tr.id`,
+        [batchId]
+      );
 
       if (runs.length === 0) {
         res.json({ success: true, data: null });
@@ -1001,7 +949,6 @@ router.get(
       const hasFailed = runs.some((r) => r.status === 'failed');
       const totalDurationMs = runs.reduce((sum, r) => sum + (r.duration_ms || 0), 0);
 
-      // Determine overall batch status
       let batchStatus: 'running' | 'completed' | 'failed';
       if (hasRunning) {
         batchStatus = 'running';
@@ -1011,7 +958,6 @@ router.get(
         batchStatus = 'completed';
       }
 
-      // Get timestamps
       const startedAt = runs[0].executed_at;
       const lastRun = completedRuns.length > 0 ? completedRuns[completedRuns.length - 1] : null;
       const completedAt = !hasRunning && lastRun ? lastRun.executed_at : null;
@@ -1074,7 +1020,6 @@ router.get(
     try {
       const runDir = path.join(process.cwd(), 'tests', 'reports', 'results', `run-${id}`);
 
-      // Check if directory exists
       if (!fs.existsSync(runDir)) {
         res.json({
           success: true,
@@ -1107,7 +1052,6 @@ router.get(
             const filePath = path.join(screenshotsDir, file);
             const stats = fs.statSync(filePath);
 
-            // Parse filename: failure-{scenarioId}-step-{stepId}.png
             const match = file.match(/failure-(\d+)-step-(\d+)\.png/);
             const scenarioId = match ? parseInt(match[1], 10) : undefined;
             const stepId = match ? parseInt(match[2], 10) : undefined;
@@ -1143,7 +1087,6 @@ router.get(
     const { id, filename } = req.params;
 
     try {
-      // Validate filename to prevent directory traversal
       if (filename.includes('..') || filename.includes('/')) {
         res.status(400).json({ success: false, error: 'Invalid filename' });
         return;
@@ -1196,7 +1139,9 @@ router.post(
 
       // Check if test run exists
       const db = getDb();
-      const run = db.prepare('SELECT id FROM test_runs WHERE id = ?').get(testRunId);
+      const run = await db.get<{ id: number }>('SELECT id FROM test_runs WHERE id = ?', [
+        testRunId,
+      ]);
       if (!run) {
         res.status(404).json({ success: false, error: 'Test run not found' });
         return;
@@ -1229,7 +1174,6 @@ router.get('/:id/pdf', async (req: Request<IdParams>, res: Response): Promise<vo
       return;
     }
 
-    // Get existing PDF path or check if it exists
     const pdfPath = await getPdfPath(testRunId);
 
     if (!pdfPath) {
@@ -1239,23 +1183,19 @@ router.get('/:id/pdf', async (req: Request<IdParams>, res: Response): Promise<vo
       return;
     }
 
-    // Check if file exists
     if (!fs.existsSync(pdfPath)) {
       res.status(404).json({ success: false, error: 'PDF file not found on disk' });
       return;
     }
 
-    // Get file stats
     const stat = fs.statSync(pdfPath);
 
-    // Set headers for PDF download
     res.writeHead(200, {
       'Content-Type': 'application/pdf',
       'Content-Length': stat.size,
       'Content-Disposition': `attachment; filename="test-run-${id}-report.pdf"`,
     });
 
-    // Stream the file
     fs.createReadStream(pdfPath).pipe(res);
   } catch (err) {
     const error = err as Error;
@@ -1297,11 +1237,11 @@ router.get(
 );
 
 // GET /api/test-runs/:id/video - Stream video file for test run
-router.get('/:id/video', (req: Request<IdParams>, res: Response): void => {
+router.get('/:id/video', async (req: Request<IdParams>, res: Response): Promise<void> => {
   const { id } = req.params;
 
   try {
-    // First, try the new location (per-run directory)
+    // First, try the new location
     let videoPath = path.join(
       process.cwd(),
       'tests',
@@ -1311,38 +1251,35 @@ router.get('/:id/video', (req: Request<IdParams>, res: Response): void => {
       'video.webm'
     );
 
-    // If not found, check the database for the stored path (legacy location)
+    // If not found, check the database for the stored path
     if (!fs.existsSync(videoPath)) {
-      const db = getRegistryDb();
-      const run = db.prepare('SELECT video_path FROM test_runs WHERE id = ?').get(id) as
-        | { video_path: string | null }
-        | undefined;
+      const db = getDb();
+      const run = await db.get<{ video_path: string | null }>(
+        'SELECT video_path FROM test_runs WHERE id = ?',
+        [id]
+      );
 
       if (!run || !run.video_path) {
         res.status(404).json({ success: false, error: 'Video not found for this test run' });
         return;
       }
 
-      // Resolve video path (handle both absolute and relative paths)
       videoPath = run.video_path;
       if (!path.isAbsolute(videoPath)) {
         videoPath = path.join(process.cwd(), videoPath);
       }
 
-      // Check if file exists
       if (!fs.existsSync(videoPath)) {
         res.status(404).json({ success: false, error: 'Video file not found on disk' });
         return;
       }
     }
 
-    // Get file stats
     const stat = fs.statSync(videoPath);
     const fileSize = stat.size;
     const range = req.headers.range;
 
     if (range) {
-      // Handle range requests for video seeking
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
@@ -1359,7 +1296,6 @@ router.get('/:id/video', (req: Request<IdParams>, res: Response): void => {
       res.writeHead(206, head);
       file.pipe(res);
     } else {
-      // Send entire file
       const head = {
         'Content-Length': fileSize,
         'Content-Type': 'video/webm',
