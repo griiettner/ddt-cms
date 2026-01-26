@@ -1,34 +1,13 @@
-FROM node:22-slim
-
-# Install Playwright dependencies for Chromium (no build tools needed - using pure JS @libsql/client)
-RUN apt-get update && apt-get install -y \
-  libnss3 \
-  libnspr4 \
-  libatk1.0-0 \
-  libatk-bridge2.0-0 \
-  libcups2 \
-  libdrm2 \
-  libxkbcommon0 \
-  libxcomposite1 \
-  libxdamage1 \
-  libxfixes3 \
-  libxrandr2 \
-  libgbm1 \
-  libasound2 \
-  libpango-1.0-0 \
-  libcairo2 \
-  && rm -rf /var/lib/apt/lists/*
+# Use Playwright's official image - has Node.js 22 + all browser dependencies pre-installed
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
 
 WORKDIR /app
 
 # Only copy package files first for caching
 COPY package*.json ./
 
-# Install dependencies including devDeps for Tailwind
+# Install dependencies
 RUN npm install
-
-# Install Playwright browsers (chromium only to save space)
-RUN npx playwright install chromium
 
 # Copy everything else
 COPY . .
