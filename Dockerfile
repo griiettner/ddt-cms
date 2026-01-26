@@ -18,7 +18,7 @@ RUN npm install
 # Copy everything else
 COPY . .
 
-EXPOSE 3030
+EXPOSE 3030 5173
 
 # Start dev server
 CMD ["npm", "run", "dev"]
