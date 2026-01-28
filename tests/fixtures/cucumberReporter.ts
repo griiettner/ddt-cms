@@ -1,6 +1,11 @@
 /**
  * Cucumber Report Generator
- * Converts test results to Cucumber JSON format and generates HTML reports
+ * Converts test results to Cucumber JSON format
+ *
+ * Structure:
+ * - Feature = Test Set
+ * - Elements = All Scenarios from all Cases in the Test Set
+ * - Steps = Steps within each Scenario
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -43,13 +48,13 @@ interface CucumberFeature {
   tags?: { name: string; line: number }[];
 }
 
-// Report directory
+// Report directories
 const REPORTS_DIR = path.join(process.cwd(), 'tests', 'reports');
-const BDD_DIR = path.join(REPORTS_DIR, 'bdd');
 const RESULTS_DIR = path.join(REPORTS_DIR, 'results');
+const REPORT_DIR = path.join(process.cwd(), 'report');
 
 /**
- * Convert our step status to Cucumber status
+ * Convert status to Cucumber status
  */
 function toCucumberStatus(status: string): 'passed' | 'failed' | 'skipped' | 'pending' {
   switch (status) {
@@ -65,7 +70,7 @@ function toCucumberStatus(status: string): 'passed' | 'failed' | 'skipped' | 'pe
 }
 
 /**
- * Generate a slug from a string
+ * Generate a slug from a string (lowercase, hyphens)
  */
 function slugify(text: string): string {
   return text
@@ -76,10 +81,18 @@ function slugify(text: string): string {
 
 /**
  * Convert test results to Cucumber JSON format
+ *
+ * @param result - Test run result with step data
+ * @param testSetId - Database ID of the test set
+ * @param testSetName - Name of the test set
+ * @param categoryPath - Category path (e.g., "Organization / UTEP / Credential")
+ * @param releaseNumber - Optional release number for tagging
  */
 export function convertToCucumberJson(
   result: TestRunResult,
+  testSetId: number,
   testSetName: string,
+  categoryPath: string,
   releaseNumber?: string
 ): CucumberFeature[] {
   // Group steps by scenario
@@ -105,136 +118,99 @@ export function convertToCucumberJson(
     scenarioMap.get(step.scenarioId)?.steps.push(step);
   }
 
-  // Group scenarios by case
-  const caseMap = new Map<
-    string,
-    {
-      caseName: string;
-      scenarios: {
-        scenarioId: number;
-        scenarioName: string;
-        caseName: string;
-        steps: StepResult[];
-      }[];
-    }
-  >();
+  // Build slugs for IDs
+  const categorySlug = slugify(categoryPath || 'uncategorized');
+  const testSetSlug = slugify(testSetName);
+
+  // Feature ID: <category>_<test-set>_<test-set-id>
+  const featureId = `${categorySlug}_${testSetSlug}_${testSetId}`;
+
+  // Build scenario elements
+  const elements: CucumberScenario[] = [];
+  let currentLine = 3; // Scenarios start at line 3
 
   for (const scenario of scenarioMap.values()) {
-    if (!caseMap.has(scenario.caseName)) {
-      caseMap.set(scenario.caseName, {
-        caseName: scenario.caseName,
-        scenarios: [],
-      });
-    }
-    caseMap.get(scenario.caseName)?.scenarios.push(scenario);
-  }
+    const caseSlug = slugify(scenario.caseName);
+    const scenarioSlug = slugify(scenario.scenarioName);
 
-  // Create Cucumber features (one per test case)
-  const features: CucumberFeature[] = [];
-  let featureLine = 1;
+    // Scenario ID: <category>_<test-set>_<test-set-id>_<case>_<scenario>
+    const scenarioId = `${categorySlug}_${testSetSlug}_${testSetId}_${caseSlug}_${scenarioSlug}`;
 
-  for (const testCase of caseMap.values()) {
-    const featureId = slugify(testCase.caseName);
-    const elements: CucumberScenario[] = [];
-    let scenarioLine = 3;
+    // Scenario name: <case-name> / <scenario-name>
+    const scenarioName = `${scenario.caseName} / ${scenario.scenarioName}`;
 
-    for (const scenario of testCase.scenarios) {
-      const steps: CucumberStep[] = [];
-      let stepLine = scenarioLine + 1;
+    // Build steps
+    const steps: CucumberStep[] = [];
+    let stepLine = currentLine + 1;
 
-      for (const step of scenario.steps) {
-        // Determine keyword based on step definition
-        let keyword = 'Given ';
-        const stepLower = step.stepDefinition.toLowerCase();
-        if (
-          stepLower.includes('when') ||
-          stepLower.includes('click') ||
-          stepLower.includes('enter')
-        ) {
-          keyword = 'When ';
-        } else if (
-          stepLower.includes('then') ||
-          stepLower.includes('verify') ||
-          stepLower.includes('should')
-        ) {
-          keyword = 'Then ';
-        } else if (stepLower.includes('and')) {
-          keyword = 'And ';
-        }
-
-        steps.push({
-          keyword,
-          name: step.stepDefinition,
-          line: stepLine,
-          result: {
-            status: toCucumberStatus(step.status),
-            duration: step.durationMs * 1000000, // Convert ms to nanoseconds
-            error_message: step.errorMessage,
-          },
-          match: {
-            location: `tests/fixtures/actionHandlers.ts:1`,
-          },
-        });
-
-        stepLine++;
+    for (const step of scenario.steps) {
+      // Determine keyword based on step definition
+      let keyword = 'Given ';
+      const stepLower = step.stepDefinition.toLowerCase();
+      if (
+        stepLower.includes('when') ||
+        stepLower.includes('click') ||
+        stepLower.includes('enter')
+      ) {
+        keyword = 'When ';
+      } else if (
+        stepLower.includes('then') ||
+        stepLower.includes('verify') ||
+        stepLower.includes('should')
+      ) {
+        keyword = 'Then ';
+      } else if (stepLower.includes('and')) {
+        keyword = 'And ';
       }
 
-      elements.push({
-        keyword: 'Scenario',
-        name: scenario.scenarioName,
-        description: '',
-        line: scenarioLine,
-        id: `${featureId};${slugify(scenario.scenarioName)}`,
-        type: 'scenario',
-        steps,
-        tags: releaseNumber ? [{ name: `@release-${releaseNumber}`, line: scenarioLine - 1 }] : [],
+      steps.push({
+        keyword,
+        name: step.stepDefinition,
+        line: stepLine,
+        result: {
+          status: toCucumberStatus(step.status),
+          duration: step.durationMs * 1000000, // Convert ms to nanoseconds
+          error_message: step.errorMessage,
+        },
+        match: {
+          location: `tests/fixtures/actionHandlers.ts:1`,
+        },
       });
 
-      scenarioLine = stepLine + 2;
+      stepLine++;
     }
 
-    features.push({
-      keyword: 'Feature',
-      name: testCase.caseName,
-      description: `Test Case: ${testCase.caseName}\nTest Set: ${testSetName}`,
-      line: featureLine,
-      id: featureId,
-      uri: `tests/features/${featureId}.feature`,
-      elements,
-      tags: [
-        { name: `@test-set-${slugify(testSetName)}`, line: 1 },
-        ...(releaseNumber ? [{ name: `@release-${releaseNumber}`, line: 1 }] : []),
-      ],
+    elements.push({
+      keyword: 'Scenario',
+      name: scenarioName,
+      description: '',
+      line: currentLine,
+      id: scenarioId,
+      type: 'scenario',
+      steps,
+      tags: releaseNumber ? [{ name: `@release-${releaseNumber}`, line: currentLine - 1 }] : [],
     });
 
-    featureLine += scenarioLine;
+    // Next scenario line = current + steps + 1 blank line
+    currentLine = stepLine + 1;
   }
 
-  return features;
-}
+  // Create feature (one per test set)
+  const feature: CucumberFeature = {
+    keyword: 'Feature',
+    name: testSetName,
+    description: categoryPath || '',
+    line: 1,
+    id: featureId,
+    uri: `tests/features/${testSetId}.feature`,
+    elements,
+    tags: [
+      { name: `@test-set-${testSetSlug}`, line: 1 },
+      ...(releaseNumber ? [{ name: `@release-${releaseNumber}`, line: 1 }] : []),
+    ],
+  };
 
-/**
- * Save Cucumber JSON report
- */
-export function saveCucumberJson(
-  result: TestRunResult,
-  testSetName: string,
-  testRunId: number,
-  releaseNumber?: string
-): string {
-  // Ensure directories exist
-  if (!fs.existsSync(BDD_DIR)) {
-    fs.mkdirSync(BDD_DIR, { recursive: true });
-  }
-
-  const cucumberJson = convertToCucumberJson(result, testSetName, releaseNumber);
-  const filename = `cucumber-${testRunId}.json`;
-  const filepath = path.join(BDD_DIR, filename);
-
-  fs.writeFileSync(filepath, JSON.stringify(cucumberJson, null, 2));
-  console.log(`Cucumber JSON report saved: ${filepath}`);
-
-  return filepath;
+  return [feature];
 }
 
 /**
@@ -255,80 +231,82 @@ export function saveJsonResults(result: TestRunResult, testRunId: number): strin
 }
 
 /**
- * Generate HTML report from Cucumber JSON files
- */
-export async function generateHtmlReport(
-  testRunId: number,
-  testSetName: string,
-  releaseNumber?: string
-): Promise<string> {
-  // Dynamic import for multiple-cucumber-html-reporter
-  const reporter = await import('multiple-cucumber-html-reporter');
-
-  const outputDir = path.join(BDD_DIR, `html-${testRunId}`);
-
-  // Ensure the JSON file exists
-  const jsonFile = path.join(BDD_DIR, `cucumber-${testRunId}.json`);
-  if (!fs.existsSync(jsonFile)) {
-    throw new Error(`Cucumber JSON file not found: ${jsonFile}`);
-  }
-
-  reporter.generate({
-    jsonDir: BDD_DIR,
-    reportPath: outputDir,
-    reportName: `Test Run #${testRunId} - ${testSetName}`,
-    pageTitle: `UAT DDT CMS - ${testSetName}`,
-    pageFooter: '<div class="text-center">Generated by UAT DDT CMS</div>',
-    displayDuration: true,
-    displayReportTime: true,
-    hideMetadata: false,
-    metadata: {
-      browser: {
-        name: 'chromium',
-        version: 'latest',
-      },
-      device: 'Desktop',
-      platform: {
-        name: process.platform,
-        version: process.version,
-      },
-    },
-    customData: {
-      title: 'Test Information',
-      data: [
-        { label: 'Test Run ID', value: String(testRunId) },
-        { label: 'Test Set', value: testSetName },
-        ...(releaseNumber ? [{ label: 'Release', value: releaseNumber }] : []),
-        { label: 'Executed At', value: new Date().toISOString() },
-      ],
-    },
-  });
-
-  console.log(`HTML report generated: ${outputDir}`);
-  return outputDir;
-}
-
-/**
  * Generate all reports for a test run
+ * @param isBatchRun - If true, saves to individual file for later merge
  */
-export async function generateAllReports(
+export function generateAllReports(
   result: TestRunResult,
+  testSetId: number,
   testSetName: string,
+  categoryPath: string,
   testRunId: number,
-  releaseNumber?: string
-): Promise<{
+  releaseNumber?: string,
+  isBatchRun = false
+): {
   jsonPath: string;
   cucumberPath: string;
-  htmlPath: string;
-}> {
+} {
   // Save JSON results
   const jsonPath = saveJsonResults(result, testRunId);
 
   // Save Cucumber JSON
-  const cucumberPath = saveCucumberJson(result, testSetName, testRunId, releaseNumber);
+  if (!fs.existsSync(REPORT_DIR)) {
+    fs.mkdirSync(REPORT_DIR, { recursive: true });
+  }
 
-  // Generate HTML report
-  const htmlPath = await generateHtmlReport(testRunId, testSetName, releaseNumber);
+  const cucumberJson = convertToCucumberJson(
+    result,
+    testSetId,
+    testSetName,
+    categoryPath,
+    releaseNumber
+  );
 
-  return { jsonPath, cucumberPath, htmlPath };
+  // For batch runs, save to individual file (will be merged later)
+  // For single runs, save directly to result.json
+  const cucumberFilename = isBatchRun ? `result-${testRunId}.json` : 'result.json';
+  const cucumberPath = path.join(REPORT_DIR, cucumberFilename);
+
+  fs.writeFileSync(cucumberPath, JSON.stringify(cucumberJson, null, 2));
+  console.log(
+    `Cucumber JSON report saved: ${cucumberPath} (${cucumberJson.length} features, ${result.steps.length} steps)`
+  );
+
+  return { jsonPath, cucumberPath };
+}
+
+/**
+ * Merge multiple Cucumber JSON files into a single combined report
+ * Used after batch execution completes
+ */
+export function mergeBatchReports(testRunIds: number[]): string {
+  if (!fs.existsSync(REPORT_DIR)) {
+    fs.mkdirSync(REPORT_DIR, { recursive: true });
+  }
+
+  const allFeatures: CucumberFeature[] = [];
+
+  for (const testRunId of testRunIds) {
+    const filePath = path.join(REPORT_DIR, `result-${testRunId}.json`);
+    if (fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const features = JSON.parse(content) as CucumberFeature[];
+        allFeatures.push(...features);
+        // Clean up individual file after merging
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error(`Failed to read/parse ${filePath}:`, err);
+      }
+    }
+  }
+
+  // Save combined report
+  const combinedPath = path.join(REPORT_DIR, 'result.json');
+  fs.writeFileSync(combinedPath, JSON.stringify(allFeatures, null, 2));
+  console.log(
+    `Combined Cucumber JSON report saved: ${combinedPath} (${allFeatures.length} features)`
+  );
+
+  return combinedPath;
 }

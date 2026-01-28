@@ -24,6 +24,7 @@ const RELEASE_ID = process.env.RELEASE_ID;
 const RELEASE_NUMBER = process.env.RELEASE_NUMBER;
 const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
+const IS_BATCH_RUN = process.env.IS_BATCH_RUN === 'true';
 
 // Report directories
 const REPORTS_DIR = path.join(process.cwd(), 'tests', 'reports');
@@ -39,27 +40,56 @@ function getScreenshotsDir(testRunId: string): string {
 }
 
 /**
- * Fetch test data from the API
+ * Fetch test data from the API with retry logic
  */
-async function fetchTestData(): Promise<TestData> {
+async function fetchTestData(maxRetries = 3, retryDelay = 1000): Promise<TestData> {
   if (!TEST_SET_ID || !RELEASE_ID) {
     throw new Error('TEST_SET_ID and RELEASE_ID environment variables are required');
   }
 
   const url = `${API_BASE_URL}/api/test-generation/${TEST_SET_ID}?releaseId=${RELEASE_ID}`;
   console.log(`Fetching test data from: ${url}`);
+  console.log(`  API_BASE_URL: ${API_BASE_URL}`);
+  console.log(`  TEST_SET_ID: ${TEST_SET_ID}`);
+  console.log(`  RELEASE_ID: ${RELEASE_ID}`);
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch test data: ${response.status} ${response.statusText}`);
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`  Attempt ${attempt}/${maxRetries}...`);
+      const response = await fetch(url);
+      console.log(`  Response status: ${response.status}`);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`  Response body: ${text}`);
+        throw new Error(`Failed to fetch test data: ${response.status} ${response.statusText}`);
+      }
+
+      const result = (await response.json()) as {
+        success: boolean;
+        data?: TestData;
+        error?: string;
+      };
+      if (!result.success || !result.data) {
+        throw new Error(`API error: ${result.error || 'Unknown error'}`);
+      }
+
+      console.log(`  Fetched ${result.data.cases.length} cases`);
+      return result.data;
+    } catch (err) {
+      lastError = err as Error;
+      console.error(`  Fetch error on attempt ${attempt}: ${lastError.message}`);
+
+      if (attempt < maxRetries) {
+        console.log(`  Retrying in ${retryDelay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
+    }
   }
 
-  const result = (await response.json()) as { success: boolean; data?: TestData; error?: string };
-  if (!result.success || !result.data) {
-    throw new Error(`API error: ${result.error || 'Unknown error'}`);
-  }
-
-  return result.data;
+  throw lastError || new Error('Failed to fetch test data after retries');
 }
 
 /**
@@ -100,6 +130,11 @@ async function runTests(): Promise<TestRunResult> {
     const testData = await fetchTestData();
     console.log(`Loaded test set: ${testData.testSetName}`);
     console.log(`Cases: ${testData.cases.length}`);
+
+    // Warn if no test data
+    if (testData.cases.length === 0) {
+      console.warn('WARNING: No test cases found for this test set');
+    }
 
     // Build config maps
     const selectConfigsMap = new Map<number, SelectConfig>();
@@ -307,25 +342,36 @@ async function main(): Promise<void> {
   console.log(`Test Set ID: ${TEST_SET_ID}`);
   console.log(`Release ID: ${RELEASE_ID}`);
   console.log(`Release Number: ${RELEASE_NUMBER || 'N/A'}`);
-  console.log(`Base URL: ${TEST_BASE_URL}`);
+  console.log(`Test Base URL: ${TEST_BASE_URL}`);
+  console.log(`API Base URL: ${API_BASE_URL}`);
+  console.log(`Node Version: ${process.version}`);
+  console.log(`CWD: ${process.cwd()}`);
   console.log('');
 
-  // Store test set name for reports
+  // Store test data for reports
+  let testSetId = parseInt(TEST_SET_ID || '0', 10);
   let testSetName = 'Unknown Test Set';
+  let categoryPath = '';
 
   try {
     const result = await runTests();
 
-    // Try to get test set name from test data
+    // Get test data for report metadata
     try {
       const testDataUrl = `${API_BASE_URL}/api/test-generation/${TEST_SET_ID}?releaseId=${RELEASE_ID}`;
       const response = await fetch(testDataUrl);
       if (response.ok) {
-        const data = (await response.json()) as { data?: { testSetName: string } };
-        testSetName = data.data?.testSetName || testSetName;
+        const data = (await response.json()) as {
+          data?: { testSetId: number; testSetName: string; categoryPath: string };
+        };
+        if (data.data) {
+          testSetId = data.data.testSetId;
+          testSetName = data.data.testSetName;
+          categoryPath = data.data.categoryPath || '';
+        }
       }
     } catch {
-      // Ignore - use default name
+      // Ignore - use default values
     }
 
     console.log('');
@@ -336,23 +382,36 @@ async function main(): Promise<void> {
     console.log(`Passed: ${result.passedSteps}`);
     console.log(`Failed: ${result.failedSteps}`);
 
-    // Generate reports (Cucumber JSON, HTML)
+    // Generate reports (Cucumber JSON)
+    console.log('');
+    console.log('=== Generating Reports ===');
+    console.log(`Test Run ID: ${TEST_RUN_ID}`);
+    console.log(`Test Set ID: ${testSetId}`);
+    console.log(`Test Set Name: ${testSetName}`);
+    console.log(`Category: ${categoryPath || '(none)'}`);
+    console.log(`Steps count: ${result.steps.length}`);
+    console.log(`Batch run: ${IS_BATCH_RUN}`);
+
     if (TEST_RUN_ID && result.steps.length > 0) {
-      console.log('');
-      console.log('=== Generating Reports ===');
       try {
-        const reportPaths = await generateAllReports(
+        const reportPaths = generateAllReports(
           result,
+          testSetId,
           testSetName,
+          categoryPath,
           parseInt(TEST_RUN_ID, 10),
-          RELEASE_NUMBER
+          RELEASE_NUMBER,
+          IS_BATCH_RUN
         );
         console.log(`JSON Results: ${reportPaths.jsonPath}`);
         console.log(`Cucumber JSON: ${reportPaths.cucumberPath}`);
-        console.log(`HTML Report: ${reportPaths.htmlPath}`);
       } catch (reportErr) {
         console.error('Failed to generate reports:', reportErr);
       }
+    } else {
+      console.log(
+        `Skipping report generation: TEST_RUN_ID=${TEST_RUN_ID}, steps=${result.steps.length}`
+      );
     }
 
     // Output result for queue service to capture

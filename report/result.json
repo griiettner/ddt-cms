@@ -1,0 +1,105 @@
+[
+  {
+    "keyword": "Feature",
+    "name": "New",
+    "description": "New  / Another",
+    "line": 1,
+    "id": "new-another_new_2",
+    "uri": "tests/features/2.feature",
+    "elements": [
+      {
+        "keyword": "Scenario",
+        "name": "Home / Default Scenario",
+        "description": "",
+        "line": 3,
+        "id": "new-another_new_2_home_default-scenario",
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "User visit home",
+            "line": 4,
+            "result": {
+              "status": "failed",
+              "duration": 5252000000,
+              "error_message": "expect(page).toHaveURL(expected) failed\n\nExpected pattern: /http:\\/\\/capitalone\\.com/\nReceived string:  \"https://www.capitalone.com/\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"to.have.url\" with timeout 5000ms\n    8 × unexpected value \"https://www.capitalone.com/\"\n"
+            },
+            "match": {
+              "location": "tests/fixtures/actionHandlers.ts:1"
+            }
+          },
+          {
+            "keyword": "Given ",
+            "name": "User check the URL",
+            "line": 5,
+            "result": {
+              "status": "failed",
+              "duration": 5196000000,
+              "error_message": "expect(page).toHaveURL(expected) failed\n\nExpected pattern: /http:\\/\\/capitalone\\.com/\nReceived string:  \"https://www.capitalone.com/\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"to.have.url\" with timeout 5000ms\n    9 × unexpected value \"https://www.capitalone.com/\"\n"
+            },
+            "match": {
+              "location": "tests/fixtures/actionHandlers.ts:1"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@release-2.1.1",
+            "line": 2
+          }
+        ]
+      },
+      {
+        "keyword": "Scenario",
+        "name": "Nice Case / Default Scenario",
+        "description": "",
+        "line": 7,
+        "id": "new-another_new_2_nice-case_default-scenario",
+        "type": "scenario",
+        "steps": [
+          {
+            "keyword": "Given ",
+            "name": "User fill the form",
+            "line": 8,
+            "result": {
+              "status": "passed",
+              "duration": 261000000
+            },
+            "match": {
+              "location": "tests/fixtures/actionHandlers.ts:1"
+            }
+          },
+          {
+            "keyword": "Given ",
+            "name": "User confirms the text is correct",
+            "line": 9,
+            "result": {
+              "status": "failed",
+              "duration": 5158000000,
+              "error_message": "expect(locator).toContainText(expected) failed\n\nLocator: locator('#ods-input-0')\nExpected substring: \"username\"\nReceived string:    \"\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"to.have.text\" with timeout 5000ms\n  - waiting for locator('#ods-input-0')\n    9 × locator resolved to <input type=\"text\" required=\"\" maxlength=\"50\" id=\"ods-input-0\" name=\"ods-input-0\" aria-invalid=\"false\" aria-label=\"Username\" data-initial-value=\"Username\" _ngcontent-web-shell-c2931505271=\"\" aria-describedby=\"us-login-auth-error-user\" class=\"login-username grv-shr-lib-textfield__input ng-untouched ng-dirty ng-valid\"/>\n      - unexpected value \"\"\n"
+            },
+            "match": {
+              "location": "tests/fixtures/actionHandlers.ts:1"
+            }
+          }
+        ],
+        "tags": [
+          {
+            "name": "@release-2.1.1",
+            "line": 6
+          }
+        ]
+      }
+    ],
+    "tags": [
+      {
+        "name": "@test-set-new",
+        "line": 1
+      },
+      {
+        "name": "@release-2.1.1",
+        "line": 1
+      }
+    ]
+  }
+]

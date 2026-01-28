@@ -33,6 +33,12 @@ interface ScenarioWithCaseRow {
   case_order: number;
 }
 
+interface CategoryRow {
+  id: number;
+  name: string;
+  parent_id: number | null;
+}
+
 interface StepRow {
   id: number;
   test_scenario_id: number;
@@ -48,8 +54,10 @@ interface StepRow {
   expected_results: string | null;
 }
 
-interface TestSetNameRow {
+interface TestSetRow {
+  id: number;
   name: string;
+  category_id: number | null;
 }
 
 /**
@@ -78,15 +86,36 @@ router.get(
     try {
       const db = getDb();
 
-      // Get test set name
-      const testSet = await db.get<TestSetNameRow>(
-        'SELECT name FROM test_sets WHERE id = ? AND release_id = ?',
+      // Get test set with category
+      const testSet = await db.get<TestSetRow>(
+        'SELECT id, name, category_id FROM test_sets WHERE id = ? AND release_id = ?',
         [testSetIdNum, releaseIdNum]
       );
 
       if (!testSet) {
         res.status(404).json({ success: false, error: 'Test set not found' });
         return;
+      }
+
+      // Build category path (e.g., "Organization / UTEP / Credential")
+      let categoryPath = '';
+      if (testSet.category_id) {
+        const categoryParts: string[] = [];
+        let currentCategoryId: number | null = testSet.category_id;
+
+        while (currentCategoryId !== null) {
+          const categoryRow: CategoryRow | undefined = await db.get<CategoryRow>(
+            'SELECT id, name, parent_id FROM categories WHERE id = ?',
+            [currentCategoryId]
+          );
+          if (categoryRow) {
+            categoryParts.unshift(categoryRow.name);
+            currentCategoryId = categoryRow.parent_id;
+          } else {
+            break;
+          }
+        }
+        categoryPath = categoryParts.join(' / ');
       }
 
       // Get all scenarios with their parent case info
@@ -201,6 +230,7 @@ router.get(
       const result: TestGenerationData = {
         testSetId: testSetIdNum,
         testSetName: testSet.name,
+        categoryPath,
         releaseId: releaseIdNum,
         cases: Array.from(casesMap.values()),
         selectConfigs,

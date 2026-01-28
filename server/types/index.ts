@@ -312,6 +312,7 @@ export interface TestGenerationCase {
 export interface TestGenerationData {
   testSetId: number;
   testSetName: string;
+  categoryPath: string;
   releaseId: number;
   cases: TestGenerationCase[];
   selectConfigs: SelectConfigRow[];

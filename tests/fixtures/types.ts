@@ -52,6 +52,7 @@ export interface MatchConfig {
 export interface TestData {
   testSetId: number;
   testSetName: string;
+  categoryPath: string;
   releaseId: number;
   cases: TestCase[];
   selectConfigs: SelectConfig[];

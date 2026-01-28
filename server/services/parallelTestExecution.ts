@@ -6,6 +6,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as fs from 'fs';
 import { getDb } from '../db/database.js';
 import type { PlaywrightRunResult } from './testExecutionQueue.js';
 
@@ -14,6 +15,57 @@ const __dirname = path.dirname(__filename);
 
 // Maximum concurrent test executions
 const MAX_CONCURRENT = 7;
+
+// Report directory for cucumber JSON
+const REPORT_DIR = path.join(process.cwd(), 'report');
+
+/**
+ * Merge individual batch cucumber reports into a combined result.json
+ */
+function mergeBatchCucumberReports(testRunIds: number[]): void {
+  console.log(`[7PS] Starting merge for ${testRunIds.length} test runs: ${testRunIds.join(', ')}`);
+  console.log(`[7PS] Report directory: ${REPORT_DIR}`);
+
+  if (!fs.existsSync(REPORT_DIR)) {
+    fs.mkdirSync(REPORT_DIR, { recursive: true });
+    console.log(`[7PS] Created report directory: ${REPORT_DIR}`);
+  }
+
+  // List all files in report directory before merge
+  const filesInDir = fs.readdirSync(REPORT_DIR);
+  console.log(`[7PS] Files in report dir before merge: ${filesInDir.join(', ') || '(none)'}`);
+
+  const allFeatures: unknown[] = [];
+
+  for (const testRunId of testRunIds) {
+    const filePath = path.join(REPORT_DIR, `result-${testRunId}.json`);
+    console.log(`[7PS] Looking for: ${filePath}`);
+    if (fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const features = JSON.parse(content) as unknown[];
+        console.log(`[7PS] Found ${features.length} features in test run ${testRunId}`);
+        allFeatures.push(...features);
+        // Clean up individual file after merging
+        fs.unlinkSync(filePath);
+        console.log(`[7PS] Merged and removed: ${filePath}`);
+      } catch (err) {
+        console.error(`[7PS] Failed to read/parse ${filePath}:`, err);
+      }
+    } else {
+      console.log(
+        `[7PS] WARNING: No cucumber report found for test run ${testRunId} at ${filePath}`
+      );
+    }
+  }
+
+  // Save combined report
+  const combinedPath = path.join(REPORT_DIR, 'result.json');
+  fs.writeFileSync(combinedPath, JSON.stringify(allFeatures, null, 2));
+  console.log(
+    `[7PS] Combined Cucumber report saved: ${combinedPath} (${allFeatures.length} features from ${testRunIds.length} test sets)`
+  );
+}
 
 // Batch execution item
 interface BatchItem {
@@ -166,13 +218,20 @@ class ParallelTestExecution extends EventEmitter {
 
     // Wait for all to complete (in background)
     Promise.all(executing)
-      .then(() => {
+      .then(async () => {
         batchStatus.status = batchStatus.failedSets > 0 ? 'failed' : 'completed';
         batchStatus.completedAt = new Date();
         this.emit('complete', batchStatus);
         console.log(
           `[7PS] Batch ${batchId} completed: ${batchStatus.passedSets} passed, ${batchStatus.failedSets} failed`
         );
+
+        // Wait for file system to sync
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Merge individual cucumber reports into combined result.json
+        const allTestRunIds = items.map((item) => item.testRunId);
+        mergeBatchCucumberReports(allTestRunIds);
       })
       .catch((err) => {
         batchStatus.status = 'failed';
@@ -201,6 +260,7 @@ class ParallelTestExecution extends EventEmitter {
         TEST_BASE_URL: item.baseUrl,
         API_BASE_URL: `http://localhost:${serverPort}`,
         PLAYWRIGHT_WORKERS: '1', // Each test set runs with 1 worker
+        IS_BATCH_RUN: 'true', // Flag to save individual cucumber reports
       };
 
       console.log(`[7PS] Starting test set ${item.testSetId} (run ${item.testRunId})`);
@@ -222,23 +282,44 @@ class ParallelTestExecution extends EventEmitter {
       let stderr = '';
 
       child.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
+        const text = data.toString();
+        stdout += text;
+        // Log important output for debugging
+        if (text.includes('error') || text.includes('Error') || text.includes('failed')) {
+          console.log(`[7PS] Test run ${item.testRunId} stdout: ${text.trim()}`);
+        }
       });
 
       child.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
+        const text = data.toString();
+        stderr += text;
+        console.error(`[7PS] Test run ${item.testRunId} stderr: ${text.trim()}`);
       });
 
       child.on('close', (code) => {
+        console.log(`[7PS] Test run ${item.testRunId} completed with exit code: ${code}`);
+
         const resultMatch = stdout.match(/RESULT:(.+)$/m);
 
         if (resultMatch) {
           try {
             const result = JSON.parse(resultMatch[1]) as PlaywrightRunResult;
+            console.log(
+              `[7PS] Test run ${item.testRunId} result: status=${result.status}, steps=${result.totalSteps}, passed=${result.passedSteps}, failed=${result.failedSteps}`
+            );
             resolve(result);
             return;
           } catch (parseErr) {
             console.error(`[7PS] Failed to parse RESULT JSON: ${parseErr}`);
+          }
+        } else {
+          // Log full output for debugging when no RESULT found
+          console.log(`[7PS] Test run ${item.testRunId} - No RESULT found in output`);
+          console.log(
+            `[7PS] Test run ${item.testRunId} stdout (last 2000 chars): ${stdout.slice(-2000)}`
+          );
+          if (stderr) {
+            console.error(`[7PS] Test run ${item.testRunId} stderr: ${stderr}`);
           }
         }
 
