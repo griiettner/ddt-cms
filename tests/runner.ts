@@ -6,6 +6,7 @@
 import { chromium, type Browser, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import dotenv from 'dotenv';
 import { executeStep } from './fixtures/actionHandlers.js';
 import { generateAllReports } from './fixtures/cucumberReporter.js';
 import type {
@@ -17,14 +18,54 @@ import type {
   MatchConfig,
 } from './fixtures/types.js';
 
+// Load .env file
+dotenv.config();
+
 // Get environment variables
 const TEST_RUN_ID = process.env.TEST_RUN_ID;
 const TEST_SET_ID = process.env.TEST_SET_ID;
-const RELEASE_ID = process.env.RELEASE_ID;
-const RELEASE_NUMBER = process.env.RELEASE_NUMBER;
+let RELEASE_ID = process.env.RELEASE_ID;
+let RELEASE_NUMBER = process.env.RELEASE_NUMBER;
 const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
 const IS_BATCH_RUN = process.env.IS_BATCH_RUN === 'true';
+
+interface LatestActiveResponse {
+  success: boolean;
+  data?: {
+    id: number;
+    release_number: string;
+  };
+  error?: string;
+}
+
+/**
+ * Fetch the latest active release from the API
+ */
+async function fetchLatestActiveRelease(): Promise<{ id: string; releaseNumber: string }> {
+  const url = `${API_BASE_URL}/api/releases/latest-active`;
+  console.log(`Fetching latest active release from: ${url}`);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch latest active release: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const result = (await response.json()) as LatestActiveResponse;
+  if (!result.success || !result.data) {
+    throw new Error(`No active release found: ${result.error || 'Unknown error'}`);
+  }
+
+  console.log(
+    `  Found latest active release: ${result.data.release_number} (ID: ${result.data.id})`
+  );
+  return {
+    id: String(result.data.id),
+    releaseNumber: result.data.release_number,
+  };
+}
 
 // Report directories
 const REPORTS_DIR = path.join(process.cwd(), 'tests', 'reports');
@@ -39,19 +80,62 @@ function getScreenshotsDir(testRunId: string): string {
   return path.join(getRunDir(testRunId), 'screenshots');
 }
 
+interface TestSetInfo {
+  id: number;
+  name: string;
+}
+
 /**
- * Fetch test data from the API with retry logic
+ * Ensure RELEASE_ID is resolved (from env or latest active)
  */
-async function fetchTestData(maxRetries = 3, retryDelay = 1000): Promise<TestData> {
-  if (!TEST_SET_ID || !RELEASE_ID) {
-    throw new Error('TEST_SET_ID and RELEASE_ID environment variables are required');
+async function resolveReleaseId(): Promise<void> {
+  if (!RELEASE_ID) {
+    console.log('RELEASE_ID not provided, fetching latest active release...');
+    const latestRelease = await fetchLatestActiveRelease();
+    RELEASE_ID = latestRelease.id;
+    RELEASE_NUMBER = latestRelease.releaseNumber;
+  }
+}
+
+/**
+ * Fetch all test sets for a release
+ */
+async function fetchTestSetsForRelease(releaseId: string): Promise<TestSetInfo[]> {
+  const url = `${API_BASE_URL}/api/test-sets/${releaseId}?limit=1000`;
+  console.log(`Fetching test sets for release ${releaseId} from: ${url}`);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch test sets: ${response.status} ${response.statusText}`);
   }
 
-  const url = `${API_BASE_URL}/api/test-generation/${TEST_SET_ID}?releaseId=${RELEASE_ID}`;
+  const result = (await response.json()) as {
+    success: boolean;
+    data?: TestSetInfo[];
+    error?: string;
+  };
+  if (!result.success || !result.data) {
+    throw new Error(`API error: ${result.error || 'Unknown error'}`);
+  }
+
+  console.log(`  Found ${result.data.length} test sets`);
+  return result.data;
+}
+
+/**
+ * Fetch test data for a single test set from the API with retry logic
+ */
+async function fetchTestDataForSet(
+  testSetId: string,
+  releaseId: string,
+  maxRetries = 3,
+  retryDelay = 1000
+): Promise<TestData> {
+  const url = `${API_BASE_URL}/api/test-generation/${testSetId}?releaseId=${releaseId}`;
   console.log(`Fetching test data from: ${url}`);
   console.log(`  API_BASE_URL: ${API_BASE_URL}`);
-  console.log(`  TEST_SET_ID: ${TEST_SET_ID}`);
-  console.log(`  RELEASE_ID: ${RELEASE_ID}`);
+  console.log(`  TEST_SET_ID: ${testSetId}`);
+  console.log(`  RELEASE_ID: ${releaseId}`);
 
   let lastError: Error | null = null;
 
@@ -90,6 +174,75 @@ async function fetchTestData(maxRetries = 3, retryDelay = 1000): Promise<TestDat
   }
 
   throw lastError || new Error('Failed to fetch test data after retries');
+}
+
+/**
+ * Fetch test data - either for a specific test set or all test sets in the release
+ */
+async function fetchTestData(): Promise<TestData> {
+  await resolveReleaseId();
+
+  if (!RELEASE_ID) {
+    throw new Error('Could not resolve RELEASE_ID');
+  }
+
+  const releaseId = RELEASE_ID;
+
+  if (TEST_SET_ID) {
+    return fetchTestDataForSet(TEST_SET_ID, releaseId);
+  }
+
+  // No TEST_SET_ID provided - fetch all test sets for the release and merge
+  console.log('TEST_SET_ID not provided, fetching all test sets for the release...');
+  const testSets = await fetchTestSetsForRelease(releaseId);
+
+  if (testSets.length === 0) {
+    throw new Error(`No test sets found for release ${releaseId}`);
+  }
+
+  // Fetch test data for each test set and merge
+  const allTestData: TestData[] = [];
+  for (const testSet of testSets) {
+    try {
+      const data = await fetchTestDataForSet(String(testSet.id), releaseId);
+      allTestData.push(data);
+    } catch (err) {
+      console.warn(
+        `  Skipping test set ${testSet.name} (ID: ${testSet.id}): ${(err as Error).message}`
+      );
+    }
+  }
+
+  if (allTestData.length === 0) {
+    throw new Error('No test data could be fetched for any test set');
+  }
+
+  // Merge all test data into one
+  const merged: TestData = {
+    testSetId: allTestData[0].testSetId,
+    testSetName: allTestData.map((d) => d.testSetName).join(', '),
+    categoryPath: allTestData[0].categoryPath,
+    releaseId: allTestData[0].releaseId,
+    cases: allTestData.flatMap((d) => d.cases),
+    selectConfigs: allTestData.flatMap((d) => d.selectConfigs),
+    matchConfigs: allTestData.flatMap((d) => d.matchConfigs),
+  };
+
+  // Deduplicate configs by id
+  const uniqueSelectConfigs = new Map<number, (typeof merged.selectConfigs)[0]>();
+  for (const config of merged.selectConfigs) {
+    uniqueSelectConfigs.set(config.id, config);
+  }
+  merged.selectConfigs = Array.from(uniqueSelectConfigs.values());
+
+  const uniqueMatchConfigs = new Map<number, (typeof merged.matchConfigs)[0]>();
+  for (const config of merged.matchConfigs) {
+    uniqueMatchConfigs.set(config.id, config);
+  }
+  merged.matchConfigs = Array.from(uniqueMatchConfigs.values());
+
+  console.log(`  Merged ${allTestData.length} test sets: ${merged.cases.length} total cases`);
+  return merged;
 }
 
 /**
