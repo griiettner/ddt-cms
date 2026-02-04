@@ -1,0 +1,308 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.3.7">
+  <diagram name="Database Schema" id="Cxzvbmj07npSTAJFVl2q">
+    <mxGraphModel dx="1580" dy="1155" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-103" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=28;fontStyle=1;fontColor=#333333;" value="UAT DDT CMS - Test Execution Architecture" vertex="1">
+          <mxGeometry height="50" width="700" x="350" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-104" parent="1" style="text;html=1;strokeColor=none;fillColor=#4A90D9;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="1. ENTRY POINTS" vertex="1">
+          <mxGeometry height="30" width="180" x="40" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-105" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;fontStyle=1;" value="Web UI (React)" vertex="1">
+          <mxGeometry height="40" width="180" x="40" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-106" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" value="• TestRunModal (single)&#xa;• Run7PSModal (batch)" vertex="1">
+          <mxGeometry height="40" width="180" x="40" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-107" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;fontStyle=1;" value="CLI Script" vertex="1">
+          <mxGeometry height="40" width="180" x="260" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-108" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" value="scripts/run-7ps.sh&#xa;(CI/CD Integration)" vertex="1">
+          <mxGeometry height="40" width="180" x="260" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-109" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;fontStyle=1;" value="External Systems" vertex="1">
+          <mxGeometry height="40" width="180" x="480" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-110" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" value="curl / HTTP clients&#xa;CI/CD Pipelines" vertex="1">
+          <mxGeometry height="40" width="180" x="480" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-111" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-105" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;entryX=0.36;entryY=-0.01;entryDx=0;entryDy=0;entryPerimeter=0;" target="lw1HzNOSdwyhLdiyckfW-115">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="190" y="237" />
+              <mxPoint x="263" y="237" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-112" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-107" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="lw1HzNOSdwyhLdiyckfW-115">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="380" y="240" />
+              <mxPoint x="350" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-113" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-109" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;entryX=0.645;entryY=-0.01;entryDx=0;entryDy=0;entryPerimeter=0;" target="lw1HzNOSdwyhLdiyckfW-115">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="237" />
+              <mxPoint x="440" y="237" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-114" parent="1" style="text;html=1;strokeColor=none;fillColor=#82B366;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="2. REST API" vertex="1">
+          <mxGeometry height="30" width="180" x="40" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-115" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="100" width="620" x="40" y="295" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-116" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;" value="Express.js API Server" vertex="1">
+          <mxGeometry height="25" width="620" x="40" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-117" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontFamily=Courier New;" value="POST /api/test-runs/execute/:testSetId    →  Single Test Set Execution&#xa;POST /api/test-runs/execute-all            →  7PS Batch Execution&#xa;GET  /api/test-runs/batch/:id/status       →  Poll Progress&#xa;GET  /api/test-runs/batch/:id/details      →  Final Results" vertex="1">
+          <mxGeometry height="65" width="580" x="60" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-118" parent="1" style="text;html=1;strokeColor=none;fillColor=#D79B00;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="3. BACKEND SERVICES" vertex="1">
+          <mxGeometry height="30" width="200" x="40" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-119" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="120" width="280" x="40" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-120" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;" value="testExecutionQueue.ts" vertex="1">
+          <mxGeometry height="25" width="280" x="40" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-121" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=2;" value="Single Test Execution (FIFO)" vertex="1">
+          <mxGeometry height="20" width="280" x="40" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-122" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" value="• One test at a time&#xa;• Queue-based processing&#xa;• Real-time progress events&#xa;• EventEmitter pattern" vertex="1">
+          <mxGeometry height="65" width="240" x="60" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-123" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="120" width="280" x="380" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-124" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontStyle=1;" value="parallelTestExecution.ts" vertex="1">
+          <mxGeometry height="25" width="280" x="380" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-125" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=2;" value="7PS - 7 Parallel Sets" vertex="1">
+          <mxGeometry height="20" width="280" x="380" y="495" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-126" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;" value="• MAX_CONCURRENT = 7&#xa;• Concurrent execution&#xa;• Batch status tracking&#xa;• Merges Cucumber reports" vertex="1">
+          <mxGeometry height="65" width="240" x="400" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-127" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-115" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#B85450;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" target="lw1HzNOSdwyhLdiyckfW-119">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="195" y="410" />
+              <mxPoint x="280" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-128" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-115" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#D79B00;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" target="lw1HzNOSdwyhLdiyckfW-123">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-129" parent="1" style="text;html=1;strokeColor=none;fillColor=#666666;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="4. CHILD PROCESS SPAWNING" vertex="1">
+          <mxGeometry height="30" width="280" x="40" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-130" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="160" width="620" x="40" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-131" parent="1" style="text;html=1;strokeColor=none;fillColor=#E6E6E6;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=13;fontFamily=Courier New;fontStyle=1;" value="spawn(&#39;npx&#39;, [&#39;tsx&#39;, &#39;tests/runner.ts&#39;])" vertex="1">
+          <mxGeometry height="30" width="580" x="60" y="675" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-132" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;" value="Environment Variables:" vertex="1">
+          <mxGeometry height="20" width="200" x="60" y="715" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-133" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Courier New;" value="TEST_RUN_ID      = Database record ID&#xa;TEST_SET_ID      = Test set to execute&#xa;RELEASE_ID       = Release context&#xa;TEST_BASE_URL    = Target app URL (e.g., https://qa.example.com)&#xa;API_BASE_URL     = CMS API endpoint&#xa;IS_BATCH_RUN     = &quot;true&quot; for 7PS" vertex="1">
+          <mxGeometry height="65" width="580" x="60" y="735" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-134" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-119" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" target="lw1HzNOSdwyhLdiyckfW-130">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="180" y="610" />
+              <mxPoint x="350" y="610" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-135" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-123" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" target="lw1HzNOSdwyhLdiyckfW-130">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="610" />
+              <mxPoint x="350" y="610" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-136" parent="1" style="text;html=1;strokeColor=none;fillColor=#1A1A2E;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="5. PLAYWRIGHT TEST RUNNER ★" vertex="1">
+          <mxGeometry height="30" width="300" x="40" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-137" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2D2D44;strokeColor=#1A1A2E;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="280" width="620" x="40" y="875" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-138" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="tests/runner.ts" vertex="1">
+          <mxGeometry height="30" width="620" x="40" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-139" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B3CDE3;strokeColor=#6C8EBF;fontSize=10;align=center;" value="1. INIT&#xa;────────&#xa;Read env vars&#xa;Fetch test data&#xa;Build configs" vertex="1">
+          <mxGeometry height="80" width="100" x="60" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-140" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B3CDE3;strokeColor=#6C8EBF;fontSize=10;align=center;" value="2. BROWSER&#xa;────────&#xa;chromium.launch()&#xa;Video recording&#xa;Navigate URL" vertex="1">
+          <mxGeometry height="80" width="100" x="175" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-141" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FBB4AE;strokeColor=#B85450;fontSize=10;align=center;" value="3. EXECUTE&#xa;────────&#xa;Loop: Case→&#xa;Scenario→Step&#xa;Output PROGRESS:" vertex="1">
+          <mxGeometry height="80" width="100" x="290" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-187" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-142" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=light-dark(#000000,#000000);" target="lw1HzNOSdwyhLdiyckfW-146" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-142" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#CCEBC5;strokeColor=#82B366;fontSize=10;align=center;" value="4. CLEANUP&#xa;────────&#xa;Close browser&#xa;Generate reports&#xa;Output RESULT:" vertex="1">
+          <mxGeometry height="80" width="100" x="405" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-146" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DECBE4;strokeColor=#9673A6;fontSize=10;align=center;" value="actionHandlers.ts → executeStep()&lt;div&gt;───────────&lt;br&gt;navigate, click, fill, select, assertText, assertVisible, waitFor...&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="125" x="520" y="920" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-147" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-141" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1;strokeColor=#9673A6;dashed=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="lw1HzNOSdwyhLdiyckfW-146">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="340" y="910" />
+              <mxPoint x="583" y="910" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-148" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=9;align=left;spacingLeft=5;" value="STDOUT: PROGRESS:{json}&lt;br&gt;────────────────&lt;br&gt;{&quot;currentScenario&quot;: 2,&lt;br&gt; &quot;scenarioName&quot;: &quot;...&quot;,&lt;br&gt; &quot;currentStep&quot;: 3}&lt;br&gt;&lt;br&gt;→ Real-time UI updates" vertex="1">
+          <mxGeometry height="100" width="160" x="60" y="1015" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-149" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=9;align=left;spacingLeft=5;" value="STDOUT: RESULT:{json}&lt;br&gt;────────────────&lt;br&gt;{&quot;testRunId&quot;: 123,&lt;br&gt; &quot;status&quot;: &quot;passed&quot;,&lt;br&gt; &quot;passedSteps&quot;: 24}&lt;br&gt;&lt;br&gt;→ Saved to database" vertex="1">
+          <mxGeometry height="100" width="160" x="235" y="1015" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-150" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A1A2E;strokeColor=#4A4A6A;fontColor=#FFFFFF;fontSize=10;align=left;spacingLeft=10;" value="Why runner.ts is Critical:&#xa;1. Isolated process - prevents memory leaks&#xa;2. Controls Playwright browser lifecycle&#xa;3. Executes data-driven tests from API&#xa;4. STDOUT enables real-time updates&#xa;5. Generates Cucumber/BDD reports" vertex="1">
+          <mxGeometry height="100" width="235" x="410" y="1015" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-151" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-130" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1A1A2E;" target="lw1HzNOSdwyhLdiyckfW-137">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-152" parent="1" style="text;html=1;strokeColor=none;fillColor=#6C8EBF;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="6. DATABASE &amp; REPORTS" vertex="1">
+          <mxGeometry height="30" width="240" x="40" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-153" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=11;align=center;" value="SQLite Database&lt;br&gt;──────────&lt;br&gt;test_runs&lt;br&gt;test_run_steps" vertex="1">
+          <mxGeometry height="90" width="120" x="40" y="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-154" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=11;align=center;" value="Cucumber JSON&lt;br&gt;──────────&lt;br&gt;report/result.json&lt;br&gt;(merged batch)" vertex="1">
+          <mxGeometry height="80" width="120" x="185" y="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-155" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=11;align=center;" value="PDF Reports&lt;br&gt;─────────&lt;br&gt;On-demand via&lt;br&gt;Playwright PDF" vertex="1">
+          <mxGeometry height="80" width="110" x="325" y="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-156" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=11;align=center;" value="Video Recording&lt;br&gt;─────────&lt;br&gt;run-{id}/video.webm&lt;br&gt;Full session" vertex="1">
+          <mxGeometry height="70" width="130" x="455" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-157" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=11;align=center;" value="Screenshots&lt;br&gt;────────&lt;br&gt;On failure only&lt;br&gt;failure-*.png" vertex="1">
+          <mxGeometry height="70" width="120" x="600" y="1235" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-158" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-137" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;dashed=1;" target="lw1HzNOSdwyhLdiyckfW-153" value="Results saved">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="350" y="1220" />
+              <mxPoint x="100" y="1220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-159" parent="1" style="text;html=1;strokeColor=none;fillColor=#D6B656;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="7. CLI WRAPPER (run-7ps.sh)" vertex="1">
+          <mxGeometry height="30" width="280" x="40" y="1350" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-160" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFEF0;strokeColor=#D6B656;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="100" width="620" x="40" y="1395" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-161" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;" value="Purpose: CLI interface for same API endpoints - enables CI/CD integration" vertex="1">
+          <mxGeometry height="20" width="590" x="55" y="1400" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-162" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Courier New;" value="Usage:  ./scripts/run-7ps.sh -r 2.1.1 -e qa&#xa;        ./scripts/run-7ps.sh --json --quiet   # CI/CD mode" vertex="1">
+          <mxGeometry height="35" width="590" x="55" y="1420" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-163" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" value="Flow: 1) POST /execute-all → 2) Poll /batch/:id/status → 3) GET /batch/:id/details → 4) Format output" vertex="1">
+          <mxGeometry height="25" width="590" x="55" y="1460" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-164" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="100" width="620" x="40" y="1520" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-165" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;" value="LEGEND" vertex="1">
+          <mxGeometry height="25" width="100" x="55" y="1525" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-166" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=9;" value="API" vertex="1">
+          <mxGeometry height="20" width="50" x="55" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-167" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=9;" value="Single Queue" vertex="1">
+          <mxGeometry height="20" width="75" x="115" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-168" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=9;" value="7PS Parallel" vertex="1">
+          <mxGeometry height="20" width="70" x="200" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-169" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2D2D44;strokeColor=#1A1A2E;fontSize=9;fontColor=#FFFFFF;" value="Runner" vertex="1">
+          <mxGeometry height="20" width="50" x="280" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-170" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DECBE4;strokeColor=#9673A6;fontSize=9;" value="Handlers" vertex="1">
+          <mxGeometry height="20" width="55" x="340" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-171" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=5;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=9;" value="DB" vertex="1">
+          <mxGeometry height="30" width="35" x="405" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-172" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=9;" value="Report" vertex="1">
+          <mxGeometry height="30" width="45" x="450" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-173" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=9;" value="File" vertex="1">
+          <mxGeometry height="20" width="45" x="505" y="1555" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-174" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" value="Key Files: tests/runner.ts | server/services/testExecutionQueue.ts | server/services/parallelTestExecution.ts | scripts/run-7ps.sh" vertex="1">
+          <mxGeometry height="20" width="590" x="55" y="1585" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-175" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;" value="Communication: PROGRESS:{json} for real-time updates | RESULT:{json} for final results | Both parsed from runner.ts stdout" vertex="1">
+          <mxGeometry height="15" width="590" x="55" y="1600" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-176" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F9F9F9;strokeColor=#999999;fontSize=12;" value="" vertex="1">
+          <mxGeometry height="1230" width="320" x="720" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-177" parent="1" style="text;html=1;strokeColor=none;fillColor=#333333;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#FFFFFF;" value="FLOW SUMMARY" vertex="1">
+          <mxGeometry height="30" width="280" x="740" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-178" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=5;" value="① User triggers test execution&lt;br&gt;   (UI, CLI, or external system)&lt;br&gt;&lt;br&gt;② API receives request&lt;br&gt;   • /execute/:testSetId (single)&lt;br&gt;   • /execute-all (7PS batch)&lt;br&gt;&lt;br&gt;③ Backend service handles it&lt;br&gt;   • Queue: FIFO (First In, First Out), one at a time&lt;br&gt;   • Parallel: up to `n` concurrent&lt;br&gt;&lt;br&gt;④ Child process spawned&lt;br&gt;   npx tsx tests/runner.ts&lt;br&gt;   with environment variables&lt;br&gt;&lt;br&gt;⑤ Runner.ts executes:&lt;br&gt;   a) Fetch test data from API&lt;br&gt;   b) Launch Playwright browser&lt;br&gt;   c) Execute steps via handlers&lt;br&gt;   d) Output PROGRESS: updates&lt;br&gt;   e) Generate Cucumber report&lt;br&gt;   f) Output RESULT: JSON&lt;br&gt;&lt;br&gt;⑥ Results captured&lt;br&gt;   • Database: test_runs updated&lt;br&gt;   • Cucumber JSON saved&lt;br&gt;   • Video/screenshots stored&lt;div&gt;• 7PS Report&lt;br&gt;&lt;br&gt;⑦ For 7PS batch:&lt;br&gt;   • Reports merged into one&lt;br&gt;   • Batch status updated&lt;/div&gt;" vertex="1">
+          <mxGeometry height="480" width="280" x="740" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-179" parent="1" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=#999999;" value="" vertex="1">
+          <mxGeometry height="10" width="280" x="740" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-180" parent="1" style="text;html=1;strokeColor=none;fillColor=#4A90D9;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" value="KEY INSIGHTS" vertex="1">
+          <mxGeometry height="25" width="280" x="740" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-181" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;spacingLeft=5;" value="runner.ts is the heart:&lt;br&gt;• Runs in isolated child process&lt;br&gt;• Prevents memory leaks in server&lt;br&gt;• Enables parallel execution&lt;br&gt;• Generates all reports&lt;br&gt;&lt;br&gt;STDOUT protocol:&lt;br&gt;• PROGRESS: enables live updates&lt;br&gt;• RESULT: final test outcome&lt;br&gt;• Parsed by parent process&lt;br&gt;&lt;br&gt;7PS (7 Parallel Sets):&lt;br&gt;• MAX_CONCURRENT = n&lt;br&gt;• Each gets own Playwright&lt;br&gt;• Reports merged at end&lt;br&gt;&lt;br&gt;run-7ps.sh:&lt;br&gt;• Same API, different interface&lt;br&gt;• Enables CI/CD pipelines&lt;br&gt;• Returns proper exit codes" vertex="1">
+          <mxGeometry height="310" width="280" x="740" y="705" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-182" parent="1" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=#999999;" value="" vertex="1">
+          <mxGeometry height="10" width="280" x="740" y="1025" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-183" parent="1" style="text;html=1;strokeColor=none;fillColor=#82B366;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" value="OUTPUT LOCATIONS" vertex="1">
+          <mxGeometry height="25" width="280" x="740" y="1045" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-184" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=10;fontFamily=Courier New;spacingLeft=5;" value="Cucumber Reports:&#xa;  report/result.json (batch)&#xa;  report/result-{id}.json (single)&#xa;&#xa;Videos:&#xa;  tests/reports/results/&#xa;    run-{id}/video.webm&#xa;&#xa;Screenshots (on failure):&#xa;  tests/reports/results/&#xa;    run-{id}/screenshots/&#xa;    failure-{scenario}-step-{id}.png&#xa;&#xa;PDF Reports:&#xa;  Generated on-demand&#xa;  GET /api/test-runs/:id/pdf" vertex="1">
+          <mxGeometry height="220" width="280" x="740" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-189" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=light-dark(#000000,#000000);" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="160" y="960" as="sourcePoint" />
+            <mxPoint x="175" y="960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-190" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=light-dark(#000000,#000000);" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="275" y="959.88" as="sourcePoint" />
+            <mxPoint x="290" y="959.88" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-191" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=light-dark(#000000,#000000);" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="390" y="960" as="sourcePoint" />
+            <mxPoint x="405" y="960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
