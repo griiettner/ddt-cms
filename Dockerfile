@@ -1,25 +1,18 @@
-# Development Dockerfile with hot reload
-FROM node:18-alpine
+# Use Playwright's official image - has Node.js 22 + all browser dependencies pre-installed
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
 
-# Set working directory
 WORKDIR /app
 
-# Install dependencies
-# Copy package files first for better caching
+# Only copy package files first for caching
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies for nodemon)
+# Install dependencies
 RUN npm install
 
-# Copy application code
-# Note: In development, these will be overridden by volume mounts
+# Copy everything else
 COPY . .
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+EXPOSE 3030 5173
 
-# Expose port
-EXPOSE 3000
-
-# Start with nodemon for hot reload
+# Start dev server
 CMD ["npm", "run", "dev"]

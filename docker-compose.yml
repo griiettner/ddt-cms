@@ -1,29 +1,18 @@
-version: '3.8'
-
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: cms-ddt-app
+    build: .
     ports:
-      - "3000:3000"
+      - "3030:3030"
+      - "5173:5173"
     volumes:
-      # Mount source code for hot reload
-      - ./server:/app/server
-      - ./public:/app/public
-      - ./.env:/app/.env
-      # Persist database
-      - ./data:/app/data
-      # Don't mount node_modules (use container's version)
+      - .:/app
       - /app/node_modules
+      - data:/app/data
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
-      - PORT=3000
-    restart: unless-stopped
-    networks:
-      - cms-network
+    restart: always
 
-networks:
-  cms-network:
-    driver: bridge
+volumes:
+  data:

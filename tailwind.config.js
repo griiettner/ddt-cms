@@ -1,42 +1,61 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
-    "./public/**/*.{html,js}",
-    "./public/**/*.html",
-    "./public/js/**/*.js"
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
       colors: {
         'co-blue': {
-          primary: '#004879',
-          secondary: '#0074BA',
-          light: '#4A90E2',
-          dark: '#002D4C'
+          DEFAULT: '#004879',
+          hover: '#003456',
+          light: '#0076C0',
         },
         'co-red': {
-          primary: '#DA0025',
-          secondary: '#FF0033'
+          DEFAULT: '#DA0025',
+          hover: '#B5001E',
         },
-        'co-success': '#00A758',
-        'co-warning': '#FDB71A',
         'co-gray': {
-          50: '#F7F9FA',
-          100: '#EFF3F5',
-          200: '#DFE6EB',
-          300: '#B8C5CE',
-          400: '#8B9BA6',
-          500: '#5F6F7A',
-          600: '#4A5761',
-          700: '#343F47',
-          800: '#1F262B',
-          900: '#0A0E11'
-        }
+          50: '#F7F8F9',
+          100: '#EAECED',
+          200: '#D1D5DB',
+          300: '#9CA5AF',
+          500: '#9CA5AF',
+          600: '#727b84',
+          700: '#69747F',
+          900: '#3D4551',
+        },
+        success: {
+          DEFAULT: '#00A758',
+          light: '#D1FAE5',
+        },
+        warning: {
+          DEFAULT: '#FF9E1B',
+          light: '#FEF3C7',
+        },
+        error: {
+          DEFAULT: '#DA0025',
+          light: '#FEE2E2',
+        },
+        info: '#0076C0',
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif']
-      }
-    }
+        sans: [
+          'Optimist',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'Roboto',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif',
+        ],
+      },
+      borderRadius: {
+        '12': '12px',
+      },
+    },
   },
-  plugins: []
-}
+  plugins: [],
+};

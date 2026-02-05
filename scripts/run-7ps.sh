@@ -1,0 +1,475 @@
+#!/bin/bash
+#
+# run-7ps.sh - Execute 7PS (7 Parallel Sets) batch test run via API
+#
+# Usage:
+#   ./scripts/run-7ps.sh [options]
+#
+# Optional:
+#   --release, -r       Release number (default: latest active release)
+#   --env, -e           Environment name (default: qa)
+#   --api-url, -a       API base URL (default: http://localhost:<PORT from .env>)
+#   --poll-interval     Polling interval in seconds (default: 5)
+#   --timeout           Max wait time in seconds (default: 3600)
+#   --quiet, -q         Suppress progress output
+#   --json              Output final result as JSON
+#   --help, -h          Show this help message
+#
+# Examples:
+#   ./scripts/run-7ps.sh                         # Uses latest active release + qa env
+#   ./scripts/run-7ps.sh -e dev                  # Uses latest active release + dev env
+#   ./scripts/run-7ps.sh -r 2.1.1                # Uses specific release + qa env
+#   ./scripts/run-7ps.sh -r 2.1.1 -e dev         # Uses specific release + dev env
+#   ./scripts/run-7ps.sh --json --quiet          # CI/CD mode
+
+set -e
+
+# Get script directory to find .env file
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Read PORT from .env file if it exists
+DEFAULT_PORT=3000
+if [ -f "$PROJECT_DIR/.env" ]; then
+    ENV_PORT=$(grep -E "^PORT=" "$PROJECT_DIR/.env" | cut -d'=' -f2 | tr -d ' \r')
+    if [ -n "$ENV_PORT" ]; then
+        DEFAULT_PORT="$ENV_PORT"
+    fi
+fi
+
+# Default values
+API_URL="http://localhost:${DEFAULT_PORT}"
+POLL_INTERVAL=5
+TIMEOUT=3600
+QUIET=false
+JSON_OUTPUT=false
+RELEASE=""
+ENVIRONMENT="qa"  # Default environment
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Print functions
+print_info() {
+    if [ "$QUIET" = false ]; then
+        echo -e "${BLUE}[INFO]${NC} $1"
+    fi
+}
+
+print_success() {
+    if [ "$QUIET" = false ]; then
+        echo -e "${GREEN}[SUCCESS]${NC} $1"
+    fi
+}
+
+print_warning() {
+    if [ "$QUIET" = false ]; then
+        echo -e "${YELLOW}[WARNING]${NC} $1"
+    fi
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+print_progress() {
+    if [ "$QUIET" = false ]; then
+        echo -e "${CYAN}[PROGRESS]${NC} $1"
+    fi
+}
+
+# Show help
+show_help() {
+    head -24 "$0" | tail -22 | sed 's/^#//'
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -r|--release)
+            RELEASE="$2"
+            shift 2
+            ;;
+        -e|--env|--environment)
+            ENVIRONMENT="$2"
+            shift 2
+            ;;
+        -a|--api-url)
+            API_URL="$2"
+            shift 2
+            ;;
+        --poll-interval)
+            POLL_INTERVAL="$2"
+            shift 2
+            ;;
+        --timeout)
+            TIMEOUT="$2"
+            shift 2
+            ;;
+        -q|--quiet)
+            QUIET=true
+            shift
+            ;;
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Check for required commands
+command -v curl >/dev/null 2>&1 || { print_error "curl is required but not installed."; exit 1; }
+command -v node >/dev/null 2>&1 || { print_error "node is required but not installed."; exit 1; }
+
+# JSON parsing helper using Node.js (replaces jq dependency)
+# Usage: json_get "$JSON_STRING" "path.to.value" "default_value"
+json_get() {
+    local json="$1"
+    local jpath="$2"
+    local default="${3:-}"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathParts = process.argv[2].split(".");
+        let result = data;
+        for (const key of pathParts) {
+            if (result === null || result === undefined) break;
+            result = result[key];
+        }
+        const val = (result === null || result === undefined) ? (process.argv[3] || "") : result;
+        console.log(val);
+    ' "$json" "$jpath" "$default" 2>/dev/null || echo "$default"
+}
+
+# JSON array helper - finds item by field value
+# Usage: json_find "$JSON_STRING" "data" "release_number" "2.1.1" "id"
+json_find() {
+    local json="$1"
+    local array_path="$2"
+    local search_field="$3"
+    local search_value="$4"
+    local return_field="$5"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const arr = process.argv[2].split(".").reduce((obj, key) => obj && obj[key], data) || [];
+        const item = arr.find(i => i[process.argv[3]] === process.argv[4]);
+        console.log(item ? item[process.argv[5]] : "");
+    ' "$json" "$array_path" "$search_field" "$search_value" "$return_field" 2>/dev/null || echo ""
+}
+
+# JSON array formatter for listing releases
+json_list_releases() {
+    local json="$1"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        (data.data || []).slice(0, 10).forEach(r => {
+            console.log("  - " + r.release_number + " (ID: " + r.id + ", Status: " + r.status + ")");
+        });
+    ' "$json" 2>/dev/null
+}
+
+# JSON array join helper
+json_join() {
+    local json="$1"
+    local jpath="$2"
+    local separator="${3:-, }"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathParts = process.argv[2].split(".");
+        let result = data;
+        for (const key of pathParts) {
+            if (result === null || result === undefined) break;
+            result = result[key];
+        }
+        console.log(Array.isArray(result) ? result.join(process.argv[3]) : "");
+    ' "$json" "$jpath" "$separator" 2>/dev/null || echo ""
+}
+
+# JSON pretty print helper
+json_pretty() {
+    local json="$1"
+    local jpath="${2:-}"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const pathStr = process.argv[2];
+        let result = data;
+        if (pathStr) {
+            for (const key of pathStr.split(".")) {
+                if (result === null || result === undefined) break;
+                result = result[key];
+            }
+        }
+        console.log(JSON.stringify(result, null, 2));
+    ' "$json" "$jpath" 2>/dev/null
+}
+
+# JSON test runs formatter
+json_format_test_runs() {
+    local json="$1"
+    node -e '
+        const data = JSON.parse(process.argv[1]);
+        const testRuns = data.data && data.data.testRuns ? data.data.testRuns : [];
+        testRuns.forEach(r => {
+            console.log([r.testSetName, r.status, r.passedSteps, r.failedSteps, r.totalSteps, r.durationMs].join("|"));
+        });
+    ' "$json" 2>/dev/null
+}
+
+# Remove trailing slash from API_URL
+API_URL="${API_URL%/}"
+
+print_info "Starting 7PS batch execution..."
+print_info "API URL: $API_URL"
+print_info "Environment: $ENVIRONMENT"
+echo ""
+
+# Step 1: Get release (either specified or latest active)
+if [ -z "$RELEASE" ]; then
+    # No release specified - get the latest active release
+    print_info "No release specified, fetching latest active release..."
+
+    LATEST_RESPONSE=$(curl -s "${API_URL}/api/releases/latest-active")
+
+    # Check if request succeeded
+    if [ "$(json_get "$LATEST_RESPONSE" "success" "false")" != "true" ]; then
+        ERROR_MSG=$(json_get "$LATEST_RESPONSE" "error" "Unknown error")
+        echo ""
+        print_error "No active release found!"
+        echo ""
+        echo -e "${YELLOW}$ERROR_MSG${NC}"
+        echo ""
+        echo -e "To fix this:"
+        echo -e "  1. Open the UAT DDT CMS in your browser"
+        echo -e "  2. Go to ${CYAN}Releases${NC} page"
+        echo -e "  3. Create a new release or open an existing one"
+        echo ""
+        exit 1
+    fi
+
+    RELEASE=$(json_get "$LATEST_RESPONSE" "data.release_number")
+    RELEASE_ID=$(json_get "$LATEST_RESPONSE" "data.id")
+
+    print_success "Using latest active release: ${CYAN}${RELEASE}${NC} (ID: $RELEASE_ID)"
+    echo ""
+else
+    # Release specified - look it up by number
+    print_info "Looking up release '$RELEASE'..."
+
+    RELEASE_RESPONSE=$(curl -s "${API_URL}/api/releases?search=${RELEASE}&limit=100")
+
+    # Check if request succeeded
+    if [ "$(json_get "$RELEASE_RESPONSE" "success" "false")" != "true" ]; then
+        print_error "Failed to fetch releases from API"
+        exit 1
+    fi
+
+    # Find exact match for release number
+    RELEASE_ID=$(json_find "$RELEASE_RESPONSE" "data" "release_number" "$RELEASE" "id")
+
+    if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+        echo ""
+        print_error "Release '$RELEASE' not found!"
+        echo ""
+        echo -e "${YELLOW}Available releases:${NC}"
+        json_list_releases "$RELEASE_RESPONSE"
+        echo ""
+        exit 1
+    fi
+
+    print_success "Found release '$RELEASE' (ID: $RELEASE_ID)"
+    echo ""
+fi
+
+print_info "Release: $RELEASE"
+
+# Step 2: Start batch execution
+print_info "Initiating batch execution..."
+
+START_RESPONSE=$(curl -s -X POST \
+    "${API_URL}/api/test-runs/execute-all" \
+    -H "Content-Type: application/json" \
+    -d "{\"releaseId\": ${RELEASE_ID}, \"environment\": \"${ENVIRONMENT}\"}")
+
+# Check if request succeeded
+SUCCESS=$(json_get "$START_RESPONSE" "success" "false")
+if [ "$SUCCESS" != "true" ]; then
+    ERROR_MSG=$(json_get "$START_RESPONSE" "error" "Unknown error")
+
+    # Check if it's an environment configuration error
+    if echo "$ERROR_MSG" | grep -qi "not configured"; then
+        echo ""
+        print_error "Environment '${ENVIRONMENT}' is not configured!"
+        echo ""
+        echo -e "${YELLOW}To fix this:${NC}"
+        echo -e "  1. Open the UAT DDT CMS in your browser"
+        echo -e "  2. Go to ${CYAN}Settings${NC} page"
+        echo -e "  3. Add the '${ENVIRONMENT}' environment with its URL"
+        echo ""
+        echo -e "Example URL format: ${CYAN}https://your-app-${ENVIRONMENT}.example.com${NC}"
+        echo ""
+        exit 1
+    fi
+
+    print_error "Failed to start batch execution: $ERROR_MSG"
+    exit 1
+fi
+
+# Extract batch info
+BATCH_ID=$(json_get "$START_RESPONSE" "data.batchId")
+TOTAL_SETS=$(json_get "$START_RESPONSE" "data.totalSets")
+TEST_RUN_IDS=$(json_join "$START_RESPONSE" "data.testRunIds" ", ")
+
+print_success "Batch execution started!"
+print_info "Batch ID: ${PURPLE}${BATCH_ID}${NC}"
+print_info "Total test sets: $TOTAL_SETS"
+print_info "Test run IDs: $TEST_RUN_IDS"
+echo ""
+
+# Step 3: Poll for status until complete
+print_info "Polling for execution status (interval: ${POLL_INTERVAL}s, timeout: ${TIMEOUT}s)..."
+echo ""
+
+START_TIME=$(date +%s)
+LAST_STATUS=""
+
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        print_error "Timeout reached after ${TIMEOUT}s"
+        exit 1
+    fi
+
+    # Get batch status
+    STATUS_RESPONSE=$(curl -s "${API_URL}/api/test-runs/batch/${BATCH_ID}/status")
+
+    # Check if we got a valid response
+    if [ -z "$STATUS_RESPONSE" ] || [ "$(json_get "$STATUS_RESPONSE" "success" "false")" != "true" ]; then
+        print_warning "Failed to get status, retrying..."
+        sleep "$POLL_INTERVAL"
+        continue
+    fi
+
+    # Extract status info
+    BATCH_STATUS=$(json_get "$STATUS_RESPONSE" "data.status" "unknown")
+    COMPLETED_SETS=$(json_get "$STATUS_RESPONSE" "data.completedSets" "0")
+    PASSED_SETS=$(json_get "$STATUS_RESPONSE" "data.passedSets" "0")
+    FAILED_SETS=$(json_get "$STATUS_RESPONSE" "data.failedSets" "0")
+
+    # Build progress string
+    PROGRESS_MSG="Status: ${BATCH_STATUS} | Completed: ${COMPLETED_SETS}/${TOTAL_SETS} | Passed: ${PASSED_SETS} | Failed: ${FAILED_SETS} | Elapsed: ${ELAPSED}s"
+
+    # Only print if status changed
+    if [ "$PROGRESS_MSG" != "$LAST_STATUS" ]; then
+        print_progress "$PROGRESS_MSG"
+        LAST_STATUS="$PROGRESS_MSG"
+    fi
+
+    # Check if batch is complete
+    if [ "$BATCH_STATUS" = "completed" ] || [ "$BATCH_STATUS" = "failed" ]; then
+        break
+    fi
+
+    sleep "$POLL_INTERVAL"
+done
+
+echo ""
+
+# Step 4: Get final detailed results
+print_info "Fetching final results..."
+
+DETAILS_RESPONSE=$(curl -s "${API_URL}/api/test-runs/batch/${BATCH_ID}/details")
+
+if [ "$(json_get "$DETAILS_RESPONSE" "success" "false")" != "true" ]; then
+    print_error "Failed to fetch batch details"
+    exit 1
+fi
+
+# Extract final results
+FINAL_STATUS=$(json_get "$DETAILS_RESPONSE" "data.status")
+RELEASE_NUMBER=$(json_get "$DETAILS_RESPONSE" "data.releaseNumber")
+TOTAL_DURATION_MS=$(json_get "$DETAILS_RESPONSE" "data.totalDurationMs" "0")
+TOTAL_DURATION_SEC=$((TOTAL_DURATION_MS / 1000))
+PASSED_SETS=$(json_get "$DETAILS_RESPONSE" "data.passedSets")
+FAILED_SETS=$(json_get "$DETAILS_RESPONSE" "data.failedSets")
+COMPLETED_SETS=$(json_get "$DETAILS_RESPONSE" "data.completedSets")
+STARTED_AT=$(json_get "$DETAILS_RESPONSE" "data.startedAt")
+COMPLETED_AT=$(json_get "$DETAILS_RESPONSE" "data.completedAt")
+
+# Output JSON if requested
+if [ "$JSON_OUTPUT" = true ]; then
+    json_pretty "$DETAILS_RESPONSE" "data"
+    exit 0
+fi
+
+# Print summary
+echo ""
+echo "=============================================="
+echo "           7PS BATCH EXECUTION SUMMARY"
+echo "=============================================="
+echo ""
+echo -e "Release:       ${CYAN}${RELEASE_NUMBER}${NC}"
+echo -e "Environment:   ${CYAN}${ENVIRONMENT}${NC}"
+echo -e "Batch ID:      ${PURPLE}${BATCH_ID}${NC}"
+echo ""
+echo -e "Started at:    $STARTED_AT"
+echo -e "Completed at:  $COMPLETED_AT"
+echo -e "Duration:      ${TOTAL_DURATION_SEC}s"
+echo ""
+echo "----------------------------------------------"
+echo "                   RESULTS"
+echo "----------------------------------------------"
+echo ""
+echo -e "Total Sets:    ${TOTAL_SETS}"
+echo -e "Completed:     ${COMPLETED_SETS}"
+echo -e "Passed:        ${GREEN}${PASSED_SETS}${NC}"
+echo -e "Failed:        ${RED}${FAILED_SETS}${NC}"
+echo ""
+
+# Print individual test set results
+echo "----------------------------------------------"
+echo "              TEST SET DETAILS"
+echo "----------------------------------------------"
+echo ""
+
+json_format_test_runs "$DETAILS_RESPONSE" | while IFS='|' read -r name status passed failed total duration; do
+    duration_sec=$((duration / 1000))
+
+    if [ "$status" = "passed" ]; then
+        status_color="${GREEN}PASSED${NC}"
+    elif [ "$status" = "failed" ]; then
+        status_color="${RED}FAILED${NC}"
+    else
+        status_color="${YELLOW}${status}${NC}"
+    fi
+
+    echo -e "  ${name}"
+    echo -e "    Status: ${status_color} | Steps: ${passed}/${total} passed | Duration: ${duration_sec}s"
+    echo ""
+done
+
+echo "=============================================="
+
+# Exit with appropriate code
+if [ "$FINAL_STATUS" = "failed" ]; then
+    print_error "Batch execution completed with failures"
+    exit 1
+else
+    print_success "Batch execution completed successfully!"
+    exit 0
+fi

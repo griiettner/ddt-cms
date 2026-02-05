@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Source nvm/node if available (for GUI apps that don't have full PATH)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Run lint-staged
+node_modules/.bin/lint-staged

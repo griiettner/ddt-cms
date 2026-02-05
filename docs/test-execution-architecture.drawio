@@ -1,0 +1,79 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.3.7">
+  <diagram name="Database Schema" id="Cxzvbmj07npSTAJFVl2q">
+    <mxGraphModel dx="395" dy="289" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-192" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#333333;" value="Fargate-Only Deployment (AWS)" vertex="1">
+          <mxGeometry height="40" width="700" x="200" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-193" parent="1" style="text;html=1;strokeColor=none;fillColor=#4A90D9;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#FFFFFF;" value="ENTRY POINTS" vertex="1">
+          <mxGeometry height="30" width="160" x="40" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-194" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" value="Web UI&amp;nbsp;&lt;div&gt;(React)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="160" x="40" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-195" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;" value="CLI Script&lt;div&gt;\run-7ps.sh&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-196" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=12;" value="External Systems&lt;div&gt;(curl/CI)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="50" width="160" x="40" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-197" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1A1A2E;strokeColor=#1A1A2E;fontSize=12;fontColor=#FFFFFF;" value="Corporate Proxy&lt;div&gt;HTTPS Termination&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="200" x="260" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-198" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=12;" value="S3 Static Website&lt;div&gt;(UI Assets)&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="180" x="520" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-199" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;" value="ALB (HTTP)" vertex="1">
+          <mxGeometry height="50" width="180" x="520" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-200" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=12;" value="ECS Fargate Service\nExpress API + Runner Playwright + 7PS CLI" vertex="1">
+          <mxGeometry height="90" width="260" x="740" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-201" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=11;align=center;" value="Aurora PostgreSQL&lt;div&gt;App State&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="160" x="740" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-202" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=11;" value="S3 Artifacts&lt;div&gt;Reports, Videos, Screens&lt;/div&gt;" vertex="1">
+          <mxGeometry height="70" width="200" x="740" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-203" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#999999;fontSize=10;" value="Single Fargate task recommended\nfor deterministic runner concurrency" vertex="1">
+          <mxGeometry height="50" width="260" x="740" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-204" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-194" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" target="lw1HzNOSdwyhLdiyckfW-197">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-205" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-195" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" target="lw1HzNOSdwyhLdiyckfW-197">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-206" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-196" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#666666;" target="lw1HzNOSdwyhLdiyckfW-197">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-207" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-197" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#D79B00;" target="lw1HzNOSdwyhLdiyckfW-198">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-208" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-197" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#82B366;" target="lw1HzNOSdwyhLdiyckfW-199">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-209" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-199" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#B85450;" target="lw1HzNOSdwyhLdiyckfW-200">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-210" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-200" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#6C8EBF;" target="lw1HzNOSdwyhLdiyckfW-201">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="870" y="260" />
+              <mxPoint x="820" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lw1HzNOSdwyhLdiyckfW-211" edge="1" parent="1" source="lw1HzNOSdwyhLdiyckfW-200" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#D6B656;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="lw1HzNOSdwyhLdiyckfW-202">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="970" y="415" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
