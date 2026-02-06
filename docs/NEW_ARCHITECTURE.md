@@ -63,31 +63,31 @@ This document describes the architectural transition from a monolithic Docker co
 ### New Architecture (Distributed Serverless)
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                              AWS Infrastructure                              │
-│                                                                              │
-│  ┌─────────────────────┐     ┌─────────────────────┐     ┌────────────────┐  │
-│  │        CMS          │     │        7PS          │     │      E1TS      │  │
-│  │    (AWS Lambda)     │     │   (Ephemeral Svc)   │     │ (Separate Repo)│  │
-│  │                     │     │                     │     │                │  │
-│  │  • React UI (S3)    │     │  • Receives POST    │     │  • Playwright  │  │
-│  │  • Express API (λ)  │     │  • Clones E1TS repo │     │  • Reads Aurora│  │
-│  │  • Test Management  │     │  • Runs tests       │     │  • Generates   │  │
-│  │                     │     │  • Spins up/down    │     │    reports     │  │
-│  └──────────┬──────────┘     └──────────┬──────────┘     └────────┬───────┘  │
-│             │                           │                         │          │
-│             │    1 POST (JSON+YAML)     │    2 Clone & Run        │          │
-│             └──────────────────────────►│◄────────────────────────┘          │
-│             │                           │                         │          │
-│             │    5 Poll Status/Results  │    3 Read Test Data     │          │
-│             │◄──────────────────────────┤                         │          │
-│             │                           │                         │          │
-│  ┌──────────▼───────────────────────────┴─────────────────────────▼────────┐ │
-│  │                        Aurora PostgreSQL                                │ │
-│  │                     (Shared Database - uatcms)                          │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                              AWS Infrastructure                                │
+│                                                                                │
+│  ┌─────────────────────┐     ┌─────────────────────┐     ┌──────────────────┐  │
+│  │        CMS          │     │        7PS          │     │      E1TS        │  │
+│  │    (AWS Lambda)     │     │   (Ephemeral Svc)   │     │ (Separate Repo)  │  │
+│  │                     │     │                     │     │                  │  │
+│  │  • React UI (S3)    │     │  • Receives POST    │     │  • Playwright    │  │
+│  │  • Express API (λ)  │     │  • Clones E1TS repo │     │  • Reads Aurora  │  │
+│  │  • Test Management  │     │  • Runs tests       │     │  • Generates     │  │
+│  │                     │     │  • Spins up/down    │     │    reports       │  │
+│  └──────────┬──────────┘     └──────────┬──────────┘     └────────┬─────────┘  │
+│             │                           │                         │            │
+│             │    1 POST (JSON+YAML)     │    2 Clone & Run        │            │
+│             └──────────────────────────►│◄────────────────────────┘            │
+│             │                           │                         │            │
+│             │    5 Poll Status/Results  │    3 Read Test Data     │            │
+│             │◄──────────────────────────┤                         │            │
+│             │                           │                         │            │
+│  ┌──────────▼───────────────────────────┴─────────────────────────▼─────────┐  │
+│  │                        Aurora PostgreSQL                                 │  │
+│  │                     (Shared Database - uatcms)                           │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **No Docker containers in the new architecture.** All services are serverless or ephemeral.
