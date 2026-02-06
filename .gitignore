@@ -18,3 +18,4 @@ tests/reports/html/*
 !tests/reports/html/.gitkeep
 tests/reports/bdd/*
 !tests/reports/bdd/.gitkeep
+E1TS/*

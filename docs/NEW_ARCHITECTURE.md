@@ -4,6 +4,9 @@
 
 This document describes the architectural transition from a monolithic Docker container to a serverless distributed service model with three independent components.
 
+**Related Documents:**
+- [E1TS Adaptation Proposal](./E1TS_ADAPTATION.md) - Detailed implementation guide for E1TS migration
+
 **Infrastructure Summary:**
 
 - **CMS** → AWS Lambda (serverless)
@@ -102,7 +105,7 @@ This document describes the architectural transition from a monolithic Docker co
 5 CMS polls 7PS for status and retrieves results
 ```
 
-**Key Changes (No DOcker)**
+**Key Changes (No Docker)**
 
 - CMS → AWS Lambda (serverless)
 - 7PS → Ephemeral service (spins up/down on demand)
@@ -188,7 +191,10 @@ This document describes the architectural transition from a monolithic Docker co
 - Generate Cucumber/BDD reports
 - Same test execution logic as current `tests/runner.ts`
 
-**Database Access:** Aurora PostgreSQL (read-only)
+**Database Access:** Aurora PostgreSQL (read for test data, write for test results)
+
+- **READ**: `releases`, `test_sets`, `test_cases`, `test_scenarios`, `test_steps`, `configuration_options`, `environment_configs`
+- **WRITE**: `test_runs`, `test_run_steps`
 
 **Key Difference from Current Runner:**
 | Aspect | Current `runner.ts` | New E1TS |
@@ -554,19 +560,36 @@ CREATE TRIGGER update_test_runs_updated_at BEFORE UPDATE ON test_runs
 
 ## 7PS Integration
 
-### POST Payload Format
+### Integration Model
+
+7PS (7 Parallel Sets) is Capital One's testing platform that integrates with One Pipeline. There are two ways to trigger E1TS execution:
+
+1. **One Pipeline Integration** (Primary): 7PS reads `test_config.yml` from the E1TS repository and runs tests as part of the CI/CD pipeline during `live_dependency_tests` stage.
+
+2. **API Trigger** (Secondary): CMS can trigger on-demand test execution via 7PS API for ad-hoc testing.
+
+### Test Type Selection
+
+| Test Type | Use Case | Dependencies |
+|-----------|----------|--------------|
+| `component_tests` | Isolated testing with mocked services (Mimeo, wiremock) | LocalStack, Docker Compose |
+| `live_dependency_tests` | E2E testing with real systems | Real Aurora DB, Real ExceptionsOne UI |
+
+E1TS uses **`live_dependency_tests`** because it requires real dependent systems.
+
+### POST Payload Format (API Trigger)
 
 CMS sends this JSON to 7PS to trigger test execution:
 
 ```json
 {
-  "testType": "acceptance_tests",
+  "testType": "live_dependency_tests",
   "environment": "dev",
   "buildId": "build-123",
   "artifactId": "artifact-456",
   "repoUrl": "https://github.com/cof-primary/ExceptionsOne-UAT-CMS",
   "commitSha": "abc123def456",
-  "testConfiguration": "name: ExceptionsOne-UAT-CMS\nasv: EXCEPTIONSONE\nba: BAEXCEPTIONSONE\ncomponent: E1 UAT CMS\nowner: dev.exceptionsone@capitalone.com\n\ntest_location:\n  repo_path: cof-primary/ExceptionsOne-E1TS\n  repo_branch: main\n\nacceptance_tests:\n  - dev:\n      testSets:\n        - testSetName: e1-uat-cms_tests-dev\n          testType: component\n          testAgentType: nodejs\n          testAgentRuntimeVersion: \"20\"\n          testFramework: playwright\n          testReportingType: cucumber\n          testRunner: npm\n          workingDirectory: .\n          testReportLocation: ./report\n          testSetDisabled: false\n          testAgentExecutionCommand:\n            - npm install\n            - npm run test:e1ts\n          args:\n            NODE_ENV: dev\n            DB_HOST: aurora-cluster.xxxxx.us-east-1.rds.amazonaws.com\n            DB_NAME: uatcms\n            DB_PORT: \"5432\"\n            RELEASE_ID: \"5\"\n            TEST_SET_ID: \"12\"",
+  "testConfiguration": "name: ExceptionsOne-E1TS\nasv: EXCEPTIONSONE\nba: BAEXCEPTIONSONE\ncomponent: E1 TEST AUTOMATION\nowner: dev.exceptionsone@capitalone.com\n\ntest_location:\n  repo_path: cof-primary/ExceptionsOne-E1TS\n  repo_branch: main\n\nlive_dependency_tests:\n  - dev:\n      testSets:\n        - testSetName: e1ts-live-dependency-dev\n          testType: live_dependency\n          testAgentType: nodejs\n          testAgentRuntimeVersion: \"22\"\n          testFramework: playwright\n          testReportingType: cucumber\n          testRunner: npm\n          workingDirectory: .\n          testReportLocation: ./report\n          testSetDisabled: false\n          testAgentExecutionCommands:\n            - npm ci --legacy-peer-deps\n            - npx playwright install chromium\n            - npm run test:e1ts\n          args:\n            NODE_ENV: dev\n            BASE_URL: https://exceptionsone-ui-dev.clouddgt.capitalone.com/v2/\n            DB_HOST: aurora-cluster.xxxxx.us-east-1.rds.amazonaws.com\n            DB_NAME: uatcms\n            DB_PORT: \"5432\"\n            CI: \"true\"\n            RELEASE_ID: \"5\"\n            TEST_SET_ID: \"12\"",
   "args": {},
   "secrets": {
     "DB_USER": "xxxxx",
@@ -579,40 +602,49 @@ CMS sends this JSON to 7PS to trigger test execution:
 ### YAML Configuration Breakdown
 
 ```yaml
-name: ExceptionsOne-UAT-CMS
+name: ExceptionsOne-E1TS
 asv: EXCEPTIONSONE
 ba: BAEXCEPTIONSONE
-component: E1 UAT CMS
+component: E1 TEST AUTOMATION
 owner: dev.exceptionsone@capitalone.com
 
 test_location:
   repo_path: cof-primary/ExceptionsOne-E1TS # E1TS repository
   repo_branch: main
 
-acceptance_tests:
+# Use live_dependency_tests because E1TS tests with real systems:
+# - Real ExceptionsOne application (not mocked)
+# - Real Aurora PostgreSQL database
+# - Real UI interactions via Playwright
+live_dependency_tests:
   - dev: # Environment
       testSets:
-        - testSetName: e1-uat-cms_tests-dev # Label for 7PS
-          testType: component
+        - testSetName: e1ts-live-dependency-dev # Label for 7PS
+          testType: live_dependency # Tests with real dependent systems
           testAgentType: nodejs
-          testAgentRuntimeVersion: '20'
+          testAgentRuntimeVersion: '22'
           testFramework: playwright
           testReportingType: cucumber
           testRunner: npm
           workingDirectory: .
           testReportLocation: ./report # Where Cucumber reports go
           testSetDisabled: false
-          testAgentExecutionCommand:
-            - npm install
+          testAgentExecutionCommands:
+            - npm ci --legacy-peer-deps
+            - npx playwright install chromium # Required for Playwright
             - npm run test:e1ts # E1TS entry point
           args:
             NODE_ENV: dev
+            BASE_URL: https://exceptionsone-ui-dev.clouddgt.capitalone.com/v2/
             DB_HOST: aurora-cluster.xxxxx.rds.amazonaws.com
             DB_NAME: uatcms
             DB_PORT: '5432'
+            CI: 'true'
             RELEASE_ID: '5' # Optional: specific release
             TEST_SET_ID: '12' # Optional: specific test set
 ```
+
+> **Note**: We use `live_dependency_tests` instead of `component_tests` because E1TS requires real dependent systems (Aurora DB, ExceptionsOne UI). Component tests use mocked dependencies via Mimeo/wiremock.
 
 ### CMS Integration Code (Pseudocode)
 
@@ -679,17 +711,41 @@ The E1TS repository needs these components (adapted for direct DB access):
 E1TS Repository Structure:
 ├── package.json
 ├── tsconfig.json
+├── playwright.config.ts      # Playwright configuration
+├── test_config.yml           # 7PS configuration
 ├── src/
 │   ├── index.ts              # Entry point (npm run test:e1ts)
+│   ├── data/
+│   │   └── workflowData.json # Fallback static test data
 │   ├── db/
-│   │   ├── connection.ts     # PostgreSQL connection
-│   │   └── queries.ts        # Test data queries
+│   │   ├── connection.ts     # PostgreSQL connection pool
+│   │   ├── testDataFetcher.ts # Fetch test definitions from Aurora
+│   │   └── resultWriter.ts   # Write results to test_runs table
+│   ├── pages/
+│   │   ├── index.ts          # Page object exports
+│   │   ├── BasePage.ts       # Smart locators, helpers
+│   │   ├── LoginPage.ts      # Authentication handling
+│   │   ├── ImpersonationPage.ts # User switching
+│   │   ├── CreationPage.ts   # Exception creation workflow
+│   │   ├── ReviewPage.ts     # Review/approval workflow
+│   │   └── ClosurePage.ts    # Closure workflow
 │   ├── runner/
-│   │   └── testRunner.ts     # Main test execution (like runner.ts)
-│   └── fixtures/
-│       ├── actionHandlers.ts # Playwright actions (copy from current)
-│       ├── cucumberReporter.ts # Report generation (copy from current)
-│       └── types.ts          # TypeScript interfaces
+│   │   ├── testRunner.ts     # Test orchestration
+│   │   ├── dynamicTestGenerator.ts # Generate tests from DB data
+│   │   └── actionExecutor.ts # Map step actions to page methods
+│   ├── reporter/
+│   │   ├── cucumberReporter.ts # Cucumber JSON format for 7PS
+│   │   └── progressReporter.ts # STDOUT progress for monitoring
+│   ├── tests/
+│   │   ├── e2e-workflow.spec.ts # Static E2E test (fallback)
+│   │   └── dynamic.spec.ts   # DB-driven dynamic tests
+│   ├── types/
+│   │   └── testData.ts       # TypeScript interfaces
+│   └── utils/
+│       ├── index.ts          # Utility exports
+│       ├── DatabaseUtil.ts   # PostgreSQL connection helpers
+│       ├── DbValidator.ts    # Status validation methods
+│       └── TestReporter.ts   # Custom reporting utilities
 └── report/                   # Output directory for Cucumber JSON
 ```
 
@@ -705,11 +761,12 @@ const response = await fetch(
 const testData = await response.json();
 ```
 
-**New (`E1TS/src/db/queries.ts`):**
+**New (`E1TS/src/db/testDataFetcher.ts`):**
 
 ```typescript
 // Queries Aurora PostgreSQL directly
 import { Pool } from 'pg';
+import { TestData, TestSet, TestCase, TestScenario, TestStep } from '../types/testData';
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -720,28 +777,53 @@ const pool = new Pool({
 });
 
 export async function fetchTestData(releaseId?: number, testSetId?: number): Promise<TestData> {
-  // If no release specified, get latest active
-  if (!releaseId) {
-    const result = await pool.query(
-      `SELECT id, release_number FROM releases
-       WHERE status = 'open'
-       ORDER BY created_at DESC LIMIT 1`
-    );
-    if (result.rows.length === 0) throw new Error('No active release found');
-    releaseId = result.rows[0].id;
+  // Get release (or latest open release)
+  const release = await getRelease(releaseId);
+
+  // Get test sets for release
+  const testSets = await getTestSets(release.id, testSetId);
+
+  // For each test set, fetch cases, scenarios, steps
+  for (const testSet of testSets) {
+    testSet.testCases = await getTestCases(testSet.id);
+
+    for (const testCase of testSet.testCases) {
+      testCase.scenarios = await getTestScenarios(testCase.id);
+
+      for (const scenario of testCase.scenarios) {
+        scenario.steps = await getTestSteps(scenario.id);
+      }
+    }
   }
 
-  // Build test data structure (same as /api/test-generation endpoint)
-  const testSets = await pool.query(
-    `SELECT * FROM test_sets WHERE release_id = $1 ${testSetId ? 'AND id = $2' : ''}`,
-    testSetId ? [releaseId, testSetId] : [releaseId]
-  );
+  // Get configuration options
+  const configOptions = await getConfigurationOptions(release.id);
+  const envConfigs = await getEnvironmentConfigs(release.id);
 
-  // ... fetch cases, scenarios, steps
-  // ... build TestData structure
-
-  return testData;
+  return {
+    release,
+    testSets,
+    configOptions,
+    envConfigs,
+  };
 }
+
+async function getRelease(releaseId?: number) {
+  if (releaseId) {
+    const result = await pool.query('SELECT * FROM releases WHERE id = $1', [releaseId]);
+    if (result.rows.length === 0) throw new Error(`Release ${releaseId} not found`);
+    return result.rows[0];
+  }
+
+  // Get latest open release
+  const result = await pool.query(
+    `SELECT * FROM releases WHERE status = 'open' ORDER BY created_at DESC LIMIT 1`
+  );
+  if (result.rows.length === 0) throw new Error('No active release found');
+  return result.rows[0];
+}
+
+// ... additional query functions for test_sets, test_cases, test_scenarios, test_steps
 ```
 
 ### E1TS Entry Point
@@ -749,26 +831,46 @@ export async function fetchTestData(releaseId?: number, testSetId?: number): Pro
 ```typescript
 // E1TS/src/index.ts
 
-import { fetchTestData } from './db/queries';
+import { fetchTestData } from './db/testDataFetcher';
 import { runTests } from './runner/testRunner';
-import { generateCucumberReport } from './fixtures/cucumberReporter';
+import { writeTestResults } from './db/resultWriter';
+import { generateCucumberReport } from './reporter/cucumberReporter';
 
 async function main() {
   console.log('=== E1TS Test Runner ===');
+  console.log(`Environment: ${process.env.NODE_ENV || 'dev'}`);
+  console.log(`CI Mode: ${process.env.CI || 'false'}`);
 
   const releaseId = process.env.RELEASE_ID ? parseInt(process.env.RELEASE_ID) : undefined;
   const testSetId = process.env.TEST_SET_ID ? parseInt(process.env.TEST_SET_ID) : undefined;
 
-  // Fetch test data from Aurora DB
-  const testData = await fetchTestData(releaseId, testSetId);
+  console.log(`Release ID: ${releaseId || 'latest'}`);
+  console.log(`Test Set ID: ${testSetId || 'all'}`);
 
-  // Run Playwright tests
-  const results = await runTests(testData);
+  try {
+    // 1. Fetch test data from Aurora DB
+    const testData = await fetchTestData(releaseId, testSetId);
+    console.log(`Fetched ${testData.testSets.length} test sets`);
 
-  // Generate Cucumber report in ./report directory
-  await generateCucumberReport(results, './report/result.json');
+    // 2. Run Playwright tests
+    const results = await runTests(testData);
+    console.log(`Executed ${results.totalTests} tests`);
 
-  process.exit(results.failed > 0 ? 1 : 0);
+    // 3. Write results back to database
+    await writeTestResults(results, releaseId, testSetId);
+
+    // 4. Generate Cucumber report for 7PS consumption
+    await generateCucumberReport(results, './report/cucumber.json');
+
+    // Exit with appropriate code
+    const exitCode = results.failed > 0 ? 1 : 0;
+    console.log(`\n=== E1TS Complete ===`);
+    console.log(`Passed: ${results.passed} | Failed: ${results.failed}`);
+    process.exit(exitCode);
+  } catch (error) {
+    console.error('E1TS Error:', error);
+    process.exit(1);
+  }
 }
 
 main();
@@ -811,12 +913,13 @@ main();
 
 The following features are postponed for later phases:
 
-| Feature                   | Current State     | Reason                                  |
-| ------------------------- | ----------------- | --------------------------------------- |
-| Video Recording           | Stored locally    | Need to determine 7PS artifact handling |
-| Screenshots               | Stored locally    | Need to determine 7PS artifact handling |
-| Cucumber Report Retrieval | Generated locally | Need 7PS results API format             |
-| Real-time Progress        | STDOUT parsing    | 7PS may not support live progress       |
+| Feature            | Current State  | Reason                                  |
+| ------------------ | -------------- | --------------------------------------- |
+| Video Recording    | Stored locally | Need to determine 7PS artifact handling |
+| Screenshots        | Stored locally | Need to determine 7PS artifact handling |
+| Real-time Progress | STDOUT parsing | 7PS may not support live progress       |
+
+> **Note**: Cucumber JSON reporting is now implemented in E1TS via `cucumberReporter.ts`. Reports are generated to `./report/cucumber.json` and consumed by 7PS.
 
 ---
 
@@ -834,12 +937,14 @@ The following features are postponed for later phases:
 
 ### Phase 2: E1TS Development
 
-- [ ] Create E1TS repository
-- [ ] Port `tests/fixtures/` to E1TS
-- [ ] Implement direct DB queries
-- [ ] Create `npm run test:e1ts` script
+- [ ] Create E1TS repository (`cof-primary/ExceptionsOne-E1TS`)
+- [ ] Set up project structure (pages/, db/, runner/, reporter/, types/, utils/)
+- [ ] Implement `testDataFetcher.ts` - Direct Aurora DB queries
+- [ ] Implement `resultWriter.ts` - Write to test_runs table
+- [ ] Implement `cucumberReporter.ts` - Cucumber JSON for 7PS
+- [ ] Create `npm run test:e1ts` entry point
+- [ ] Configure `test_config.yml` for 7PS live_dependency_tests
 - [ ] Test locally with Aurora connection
-- [ ] Configure 7PS integration
 
 ### Phase 3: CMS Integration
 
